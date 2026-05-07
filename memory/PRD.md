@@ -57,3 +57,12 @@ Application de quêtes style Solo Leveling. L'utilisateur rentre son profil, son
 ## Verified Tests
 - iter 3: backend pytest 7/8 (1 transient LLM budget cap, no code defect), frontend 100%.
 - Real conversation produces e.g. class_title='Artisan du Réel Enraciné' with unique poetic skills.
+
+## Update 2026-02-07 (iter 5) — PWA + Quest decomposition
+- **PWA installable**: `/manifest.json` + `/icon.svg` (cyber diamond) + meta tags (apple-touch-icon, theme-color). App installable comme PWA → rappels persistants via service worker.
+- **Décomposition de quête**: nouveau bouton "Trop dur ? Décomposer en micro-actions" sur chaque quête active.
+  - Backend: `POST /api/quests/{id}/decompose` (Claude), `PATCH /api/quests/{id}/steps/{sid}` (toggle).
+  - 3-5 micro-actions ultra-concrètes (verbes d'action, 2-15 min chacune).
+  - Quand toutes les steps sont cochées → quête auto-complétée + XP + level-up modal.
+- Helper `_complete_quest_internal()` extrait pour DRY (utilisé par /complete et auto-complete).
+- iter 5 tests: backend 10/10 + frontend 100% (decompose E2E, auto-complete + level-up E2E, PWA manifest servi).
