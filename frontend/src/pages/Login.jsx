@@ -34,10 +34,11 @@ export default function Login() {
           onClick={handleGoogleLogin}
           className="sys-btn inline-flex items-center gap-3"
         >
-          <Sparkles size={14} /> Entrer via Google
+          <Sparkles size={14} /> Franchir le seuil
         </button>
         <p className="text-slate-600 text-xs mt-8 font-mono leading-relaxed">
-          Tes données restent privées. Ton coach n'a accès qu'à ce que tu choisis de partager avec lui.
+          Authentification sécurisée via Emergent. Tes données restent privées —
+          ton coach n'a accès qu'à ce que tu choisis de partager avec lui.
         </p>
       </motion.div>
     </div>
