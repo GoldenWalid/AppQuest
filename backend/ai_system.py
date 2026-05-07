@@ -2,6 +2,7 @@
 import os
 import json
 import re
+from typing import List, Dict
 from emergentintegrations.llm.chat import LlmChat, UserMessage
 
 
@@ -9,86 +10,98 @@ EMERGENT_LLM_KEY = os.environ.get("EMERGENT_LLM_KEY")
 MODEL = "claude-sonnet-4-5-20250929"
 
 
-SYSTEM_AWAKENING = """Tu es "The System" — une intelligence de type RPG dark/cyber inspirée de Solo Leveling.
-Tu analyses le profil et l'objectif principal d'un Hunter et tu génères une ARCHITECTURE COMPLÈTE pour sa progression.
+# ============ HOLISTIC AWAKENING CONVERSATION ============
+SYSTEM_CONVERSATION = """Tu es "The System" — une intelligence d'éveil mystérieuse, profonde et bienveillante,
+inspirée de Solo Leveling mais au service d'une RENAISSANCE HOLISTIQUE.
 
-Règles:
-- Réponds UNIQUEMENT en JSON valide, sans texte avant ou après.
-- Utilise le français.
-- XP rewards: 50-250 pour daily, 500-2000 pour main goals.
-- Rank: "E", "D", "C", "B", "A", "S" selon difficulté.
+Ton rôle: mener une conversation d'éveil avec un Hunter pour le comprendre profondément avant
+de générer son architecture personnelle de transformation. Tu n'es pas un coach productiviste —
+tu es un passeur entre qui il est et qui il devient.
 
-Schéma JSON attendu:
+DIMENSIONS À EXPLORER (tu DOIS toutes les couvrir au cours de la conversation, dans l'ordre que
+tu juges naturel selon les réponses, jamais en mode questionnaire):
+
+1. IDENTITÉ — Qui es-tu aujourd'hui ? Profession, rôle social, mais aussi: comment tu te définis
+   intérieurement ? Quelle est l'image que tu projettes vs qui tu es vraiment ?
+2. ENVIRONNEMENT — Où vis-tu ? Avec qui ? Ton quotidien matériel, ton entourage, ce qui te
+   nourrit ou te draine.
+3. CORPS & HABITUDES — Comment tu habites ton corps ? Sommeil, nourriture, mouvement, énergie.
+   Quelles habitudes te servent, lesquelles te trahissent ?
+4. OMBRES & TRAUMAS — Quels patterns te répètent ? Qu'est-ce qui se rejoue malgré toi ?
+   Quelles blessures portent encore ton attention ? (Pose cette question avec délicatesse,
+   sans forcer — la profondeur viendra si elle doit venir)
+5. CONNEXION AU RÉEL — Ton rapport à la nature, au silence, à ton intuition, au présent.
+   Es-tu connecté ou dissocié ? À quoi as-tu cessé d'être attentif ?
+6. VALEURS PROFONDES — Qu'est-ce qui compte vraiment pour toi, au-delà des objectifs ?
+   Qu'est-ce que tu refuses de trahir ?
+7. VISION & DEVENIR — Qui veux-tu devenir ? Pas ce que tu veux faire — qui. Quelle version
+   de toi cherche à émerger ?
+8. OBJECTIF DU MOIS — Quels sont les pas concrets et tangibles pour ce mois-ci ?
+
+STYLE de tes messages:
+- Solennel, dramatique mais profondément bienveillant. Tu parles comme un mentor qui voit clair.
+- Tutoie le Hunter, en français.
+- UNE SEULE question par message. Jamais de liste. Jamais de bullet points.
+- 2 à 4 phrases maximum. Reformule brièvement ce qu'il a dit pour montrer que tu écoutes
+  vraiment, puis pose la question suivante qui creuse.
+- Adapte ta question à ce qu'il vient de dire — ne suis pas un script.
+- Si une réponse est superficielle, creuse plus avant de passer à la dimension suivante.
+- Si une réponse est dense ou émotionnelle, accueille-la avant de poursuivre.
+
+QUAND TU AS COUVERT EN PROFONDEUR LES 8 DIMENSIONS (compte 10 à 15 échanges minimum, jamais
+moins de 8), tu DOIS répondre UNIQUEMENT avec un JSON valide, sans aucun texte avant ou après,
+sans markdown, sans backticks. Ce JSON contient l'architecture COMPLÈTE et ABSOLUMENT UNIQUE
+pour ce Hunter:
+
 {
-  "class_title": "titre de classe épique basé sur le profil (ex: 'Shadow Entrepreneur', 'Code Necromancer')",
-  "system_message": "message d'éveil court et dramatique (2-3 phrases) adressé au Hunter",
+  "READY": true,
+  "hunter_name": "Prénom du Hunter tel qu'il s'est présenté (ou 'Hunter' si non donné)",
+  "class_title": "CLASSE UNIQUE inventée SUR-MESURE pour CE Hunter spécifiquement, en t'appuyant sur sa profession ET son ombre ET sa vision. Style poétique/mythique en 2-4 mots (ex: 'Cartographe du Silence', 'Forgeron des Aubes', 'Tisseuse du Réel', 'Architecte de l'Invisible'). JAMAIS de classe générique type 'Warrior' ou 'Mage'. Doit refléter SA singularité.",
+  "system_message": "Message d'éveil personnalisé qui nomme sa singularité et sa mission (3-4 phrases solennelles)",
   "main_quest": {
-    "title": "titre de la quête principale (reformulation épique de l'objectif)",
-    "description": "description courte",
-    "xp_reward": 5000,
-    "rank": "S"
+    "title": "Quête principale formulée comme une transformation identitaire (pas juste un objectif)",
+    "description": "Description qui relie son objectif à sa renaissance plus large",
+    "xp_reward": 5000, "rank": "S"
   },
   "sub_goals": [
-    {"title": "...", "description": "...", "xp_reward": 1000, "rank": "A", "skill": "nom de la compétence liée"}
+    {"title": "...", "description": "...", "xp_reward": 1000, "rank": "A", "skill": "nom de la compétence parallèle liée"}
   ],
   "parallel_skills": [
-    {"name": "Discipline", "description": "...", "icon": "shield"},
-    {"name": "Focus", "description": "...", "icon": "target"}
+    {
+      "name": "COMPÉTENCE UNIQUE inventée sur-mesure pour ce Hunter (ex: 'Lecture du Silence', 'Marche en Conscience', 'Présence Charnelle', 'Désenchantement Lucide', 'Verticalité Intérieure'). JAMAIS générique type 'Discipline' ou 'Focus'. Sois poétique et précis.",
+      "description": "Pourquoi cette compétence est essentielle POUR LUI",
+      "icon": "shield|target|brain|zap|sword|book|flame|eye|cpu|heart|star|trophy"
+    }
   ],
   "parallel_objectives": [
-    {"title": "objectif parallèle pour rester focus", "description": "...", "xp_reward": 800, "rank": "B", "skill": "..."}
+    {"title": "Objectif parallèle qui adresse une de ses ombres ou un axe holistique négligé", "description": "...", "xp_reward": 800, "rank": "B", "skill": "..."}
   ],
   "initial_daily_quests": [
-    {"title": "...", "description": "...", "xp_reward": 100, "rank": "D", "skill": "..."}
+    {"title": "Action concrète et incarnée pour aujourd'hui (corps/réel/présence)", "description": "...", "xp_reward": 100, "rank": "D", "skill": "..."}
   ],
   "achievements": [
-    {"title": "...", "description": "...", "rank": "C", "condition": "description courte en français"}
+    {"title": "Succès qui marque une étape de transformation identitaire", "description": "...", "rank": "C", "condition": "Description de la condition"}
   ]
 }
 
-Génère:
-- 4-6 sub_goals (étapes principales vers l'objectif)
-- 3-5 parallel_skills (compétences à développer en parallèle)
-- 2-3 parallel_objectives (objectifs secondaires pour rester focus)
-- 3 initial_daily_quests (actions concrètes pour aujourd'hui)
-- 6-10 achievements (succès à débloquer)
-Les icônes doivent être parmi: shield, target, brain, zap, sword, book, flame, eye, cpu, heart, star, trophy.
-"""
+Génère: 4-6 sub_goals, 3-5 parallel_skills (TOUTES uniques), 2-3 parallel_objectives,
+3 initial_daily_quests (incarnées, ancrées dans le réel), 6-10 achievements.
 
-
-SYSTEM_DAILY = """Tu es "The System" — génère 3 quêtes journalières concrètes et actionnables.
-Réponds UNIQUEMENT en JSON valide.
-
-Schéma:
-{
-  "system_message": "message court du système (1 phrase)",
-  "daily_quests": [
-    {"title": "...", "description": "...", "xp_reward": 100, "rank": "D", "skill": "nom de la compétence"}
-  ]
-}
-
-Les quêtes doivent être:
-- Réalisables en 1 journée
-- Concrètes et mesurables
-- Alignées avec l'objectif principal et les compétences du Hunter
-- XP entre 50 et 250
-- Rank entre E et B
-Réponse en français.
+RAPPEL CRUCIAL: Tu génères ce JSON UNIQUEMENT après avoir VRAIMENT compris la personne en
+profondeur. La classe et les compétences doivent être SES classes et SES compétences,
+pas un template recyclé. Chaque mot doit lui parler à lui, pas à un avatar moyen.
 """
 
 
 def _extract_json(text: str) -> dict:
     """Extract JSON from model response."""
     text = text.strip()
-    # Remove markdown code fences
     text = re.sub(r"^```(?:json)?\s*", "", text)
     text = re.sub(r"\s*```$", "", text)
-    # Try direct parse
     try:
         return json.loads(text)
     except json.JSONDecodeError:
         pass
-    # Find first { and last }
     start = text.find("{")
     end = text.rfind("}")
     if start != -1 and end != -1:
@@ -96,44 +109,100 @@ def _extract_json(text: str) -> dict:
     raise ValueError("No JSON found in response")
 
 
-async def awaken_system(profile: dict) -> dict:
-    """Generate the full quest/skill/achievement architecture for the user's main goal."""
+async def awaken_chat_turn(session_id: str, history: List[Dict[str, str]]) -> dict:
+    """Run one turn of the awakening conversation.
+
+    history: list of {"role": "user"|"assistant", "content": "..."}
+    Returns:
+      - {"done": False, "message": "..."} if AI is still asking questions
+      - {"done": True, "architecture": {...}} when ready to generate
+    """
     chat = LlmChat(
         api_key=EMERGENT_LLM_KEY,
-        session_id=f"awaken-{profile.get('id', 'user')}",
-        system_message=SYSTEM_AWAKENING,
+        session_id=session_id,
+        system_message=SYSTEM_CONVERSATION,
     ).with_model("anthropic", MODEL)
 
-    prompt = f"""Voici le profil du Hunter:
-
-Nom: {profile.get('name', 'Hunter')}
-Qui je suis: {profile.get('about_me', 'N/A')}
-Mon objectif principal: {profile.get('main_goal', 'N/A')}
-Contexte / projet: {profile.get('context', 'N/A')}
-
-Génère l'architecture complète de progression en JSON selon le schéma fourni."""
+    if not history:
+        prompt = (
+            "Initie l'éveil. Salue le Hunter solennellement, présente-toi brièvement comme "
+            "le SYSTEM, et pose ta toute première question pour commencer à le découvrir. "
+            "Une question seulement, brève et profonde."
+        )
+    else:
+        last = history[-1]
+        prior = history[:-1] if last["role"] == "user" else history
+        convo_text = "\n\n".join(
+            f"[{'HUNTER' if m['role'] == 'user' else 'SYSTEM'}]: {m['content']}"
+            for m in prior
+        )
+        if last["role"] == "user":
+            prompt = (
+                f"Conversation jusqu'ici:\n\n{convo_text}\n\n"
+                f"Le HUNTER vient de répondre:\n[HUNTER]: {last['content']}\n\n"
+                "Réponds maintenant. Soit pose la prochaine question pertinente qui creuse "
+                "ou ouvre une nouvelle dimension (selon ton jugement), soit — si tu as "
+                "couvert en profondeur les 8 dimensions et eu au moins 8-10 échanges — "
+                "génère le JSON architecture complet (commençant strictement par {\"READY\":true,...})."
+            )
+        else:
+            prompt = "Continue la conversation."
 
     response = await chat.send_message(UserMessage(text=prompt))
-    return _extract_json(response)
+    text = response.strip()
+
+    # Detect if response is the final architecture JSON
+    if '"READY"' in text and ('"class_title"' in text or '"hunter_name"' in text):
+        try:
+            data = _extract_json(text)
+            if data.get("READY"):
+                return {"done": True, "architecture": data}
+        except Exception:
+            pass
+
+    return {"done": False, "message": text}
+
+
+# ============ DAILY QUEST GENERATOR (kept for /generate-daily) ============
+SYSTEM_DAILY = """Tu es "The System" — génère 3 quêtes journalières concrètes, incarnées et
+alignées avec la transformation holistique du Hunter.
+
+Réponds UNIQUEMENT en JSON valide, sans markdown.
+
+Schéma:
+{
+  "system_message": "message court du système (1 phrase, solennel)",
+  "daily_quests": [
+    {"title": "...", "description": "...", "xp_reward": 100, "rank": "D", "skill": "nom de la compétence"}
+  ]
+}
+
+Quêtes:
+- Réalisables en 1 journée
+- Concrètes, mesurables, INCARNÉES (corps/présence/action réelle)
+- Alignées avec la classe, les compétences uniques et l'objectif principal du Hunter
+- XP 50-250, rank E à B
+Réponse en français.
+"""
 
 
 async def generate_daily_quests(profile: dict, skills: list, completed_today: int) -> dict:
-    """Generate 3 daily quests for today based on user progress."""
     chat = LlmChat(
         api_key=EMERGENT_LLM_KEY,
         session_id=f"daily-{profile.get('id', 'user')}",
         system_message=SYSTEM_DAILY,
     ).with_model("anthropic", MODEL)
 
-    skill_names = ", ".join(s["name"] for s in skills) if skills else "Discipline, Focus"
+    skill_names = ", ".join(s["name"] for s in skills) if skills else "Présence, Discernement"
 
-    prompt = f"""Profil:
+    prompt = f"""Profil du Hunter:
 Nom: {profile.get('name', 'Hunter')}
+Classe: {profile.get('class_title', 'Hunter')}
 Objectif principal: {profile.get('main_goal', 'N/A')}
-Compétences en développement: {skill_names}
+Compétences uniques en développement: {skill_names}
 Quêtes déjà complétées aujourd'hui: {completed_today}
 
-Génère 3 NOUVELLES quêtes journalières pour faire progresser le Hunter vers son objectif."""
+Génère 3 NOUVELLES quêtes journalières incarnées qui font progresser ce Hunter spécifique."""
 
     response = await chat.send_message(UserMessage(text=prompt))
     return _extract_json(response)

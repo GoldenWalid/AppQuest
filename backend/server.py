@@ -4,6 +4,7 @@ from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
+import re
 from pathlib import Path
 from pydantic import BaseModel, Field
 from typing import List, Optional
@@ -13,7 +14,7 @@ from datetime import datetime, timezone, date
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
-from ai_system import awaken_system, generate_daily_quests
+from ai_system import awaken_chat_turn, generate_daily_quests
 
 mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
@@ -236,31 +237,126 @@ async def get_profile():
 
 
 @api_router.post("/profile/initiate", response_model=ProfileOut)
-async def initiate_profile(data: ProfileInit):
+async def initiate_profile_legacy(data: ProfileInit):
+    """Legacy form-based onboarding (kept for compat / tests).
+    Use POST /api/awaken/chat for the conversational flow.
+    """
+    # Synthesize a minimal conversation history and run a single chat turn
+    history = [
+        {"role": "assistant", "content": "Salut Hunter, qui es-tu ?"},
+        {"role": "user", "content": f"Je m'appelle {data.name}. {data.about_me}"},
+        {"role": "assistant", "content": "Quel est ton objectif ?"},
+        {"role": "user", "content": data.main_goal},
+        {"role": "assistant", "content": "Quel est ton contexte ?"},
+        {"role": "user", "content": data.context or "Pas de contexte particulier."},
+        {"role": "user", "content": "Génère maintenant l'architecture complète, j'ai donné toutes les infos nécessaires."},
+    ]
+    sid = f"legacy-{uuid.uuid4()}"
+    try:
+        result = await awaken_chat_turn(sid, history)
+        # Force one more turn if not ready
+        attempts = 0
+        while not result.get("done") and attempts < 4:
+            history.append({"role": "assistant", "content": result.get("message", "")})
+            history.append({"role": "user", "content": "Génère maintenant le JSON architecture complet."})
+            result = await awaken_chat_turn(sid, history)
+            attempts += 1
+        if not result.get("done"):
+            raise HTTPException(status_code=500, detail="System could not generate architecture")
+        arch = result["architecture"]
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("legacy initiate failed")
+        raise HTTPException(status_code=500, detail=f"System awakening failed: {str(e)}")
+
+    return await _save_architecture(
+        name=data.name,
+        about_me=data.about_me,
+        main_goal=data.main_goal,
+        context=data.context,
+        arch=arch,
+    )
+
+
+class ChatMsg(BaseModel):
+    role: str
+    content: str
+
+
+class ChatReq(BaseModel):
+    session_id: str
+    messages: List[ChatMsg] = []
+
+
+@api_router.post("/awaken/chat")
+async def awaken_chat(req: ChatReq):
+    """Run one turn of the holistic awakening conversation.
+
+    Returns either:
+      {"done": false, "message": "next AI question"}
+      {"done": true, "profile": {...}, "system_message": "..."}
+    """
+    history = [m.model_dump() for m in req.messages]
+    try:
+        result = await awaken_chat_turn(req.session_id, history)
+    except Exception as e:
+        logger.exception("awaken_chat failed")
+        raise HTTPException(status_code=500, detail=f"System error: {str(e)}")
+
+    if not result.get("done"):
+        return {"done": False, "message": result["message"]}
+
+    arch = result["architecture"]
+    # Build readable transcript as 'about_me' / 'main_goal' fallback
+    transcript = "\n".join(f"{m['role']}: {m['content']}" for m in history if m["role"] == "user")
+    name = arch.get("hunter_name") or _extract_name_from_history(history) or "Hunter"
+    main_quest = arch.get("main_quest", {})
+    profile = await _save_architecture(
+        name=name,
+        about_me=transcript[:2000],
+        main_goal=main_quest.get("title", ""),
+        context="",
+        arch=arch,
+    )
+    return {"done": True, "profile": profile.model_dump(), "system_message": profile.system_message}
+
+
+def _extract_name_from_history(history: List[dict]) -> Optional[str]:
+    """Heuristic: try to find a first name in the first user message."""
+    for m in history:
+        if m["role"] == "user":
+            text = m["content"].strip()
+            # very simple: first word capitalized
+            words = re.findall(r"\b([A-ZÉÈÊÀÂÎÔÛÇ][a-zéèêàâîôûç]{2,})\b", text)
+            if words:
+                return words[0]
+            break
+    return None
+
+
+async def _save_architecture(
+    name: str,
+    about_me: str,
+    main_goal: str,
+    context: str,
+    arch: dict,
+) -> ProfileOut:
+    """Persist profile + skills + quests + achievements based on AI architecture."""
     pid = str(uuid.uuid4())
     profile = {
         "id": pid,
-        "name": data.name,
-        "about_me": data.about_me,
-        "main_goal": data.main_goal,
-        "context": data.context,
-    }
-
-    # Call AI
-    try:
-        arch = await awaken_system(profile)
-    except Exception as e:
-        logger.exception("AI awaken failed")
-        raise HTTPException(status_code=500, detail=f"System awakening failed: {str(e)}")
-
-    profile.update({
+        "name": name,
+        "about_me": about_me,
+        "main_goal": main_goal,
+        "context": context,
         "class_title": arch.get("class_title", "Hunter"),
         "system_message": arch.get("system_message", "Welcome, Hunter."),
         "initiated": True,
         "created_at": now_iso(),
-    })
+    }
 
-    # Reset collections first
+    # Reset
     await db.profile.delete_many({})
     await db.quests.delete_many({})
     await db.skills.delete_many({})
@@ -268,9 +364,9 @@ async def initiate_profile(data: ProfileInit):
 
     await db.profile.insert_one({"_id": PROFILE_KEY, **profile})
 
-    # Save skills
+    # Skills
     for s in arch.get("parallel_skills", []):
-        skill = {
+        await db.skills.insert_one({
             "id": str(uuid.uuid4()),
             "name": s.get("name", "Skill"),
             "description": s.get("description", ""),
@@ -278,10 +374,9 @@ async def initiate_profile(data: ProfileInit):
             "level": 1,
             "xp": 0,
             "xp_to_next": 100,
-        }
-        await db.skills.insert_one(skill)
+        })
 
-    # Save main quest
+    # Main quest
     mq = arch.get("main_quest", {})
     await db.quests.insert_one({
         "id": str(uuid.uuid4()),
@@ -297,7 +392,7 @@ async def initiate_profile(data: ProfileInit):
         "date_for": None,
     })
 
-    # Save sub goals
+    # Sub goals
     for sg in arch.get("sub_goals", []):
         await db.quests.insert_one({
             "id": str(uuid.uuid4()),
