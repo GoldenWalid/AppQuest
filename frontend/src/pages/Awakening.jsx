@@ -53,7 +53,7 @@ export default function Awakening({ onInitiated }) {
       try {
         const profile = await api.initiate(data);
         toast.success("SYSTEM activé", { description: profile.system_message });
-        onInitiated && onInitiated();
+        if (onInitiated) await onInitiated();
         navigate("/");
       } catch (e) {
         toast.error("Échec de l'éveil", { description: e?.response?.data?.detail || e.message });

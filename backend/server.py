@@ -36,7 +36,8 @@ RANK_ORDER = ["E", "D", "C", "B", "A", "S"]
 
 
 def level_from_xp(total_xp: int) -> int:
-    # Level N requires N*N*100 total XP
+    # Level N requires cumulative (N-1)**2 * 100 XP.
+    # level 1: 0 XP, level 2: 100 XP, level 3: 400 XP, level 4: 900 XP, ...
     lvl = 1
     while (lvl * lvl * 100) <= total_xp:
         lvl += 1
@@ -44,7 +45,7 @@ def level_from_xp(total_xp: int) -> int:
 
 
 def xp_for_level(level: int) -> int:
-    return level * level * 100
+    return (level - 1) * (level - 1) * 100
 
 
 def rank_from_level(level: int) -> str:
@@ -345,8 +346,18 @@ async def initiate_profile(data: ProfileInit):
             "date_for": today_str,
         })
 
-    # Achievements
-    for ach in arch.get("achievements", []):
+    # Achievements (fallback if AI returns empty)
+    achievements = arch.get("achievements") or []
+    if not achievements:
+        achievements = [
+            {"title": "Premier Pas", "description": "Compléter ta première quête.", "rank": "E", "condition": "Compléter 1 quête"},
+            {"title": "Série", "description": "Maintenir un streak de 3 jours.", "rank": "D", "condition": "Streak de 3 jours"},
+            {"title": "Ascension", "description": "Atteindre le niveau 5.", "rank": "C", "condition": "Atteindre le niveau 5"},
+            {"title": "Maître", "description": "Atteindre le niveau 10.", "rank": "B", "condition": "Atteindre le niveau 10"},
+            {"title": "Transcendance", "description": "Atteindre le niveau 20.", "rank": "A", "condition": "Atteindre le niveau 20"},
+            {"title": "Monarque", "description": "Atteindre le rang S.", "rank": "S", "condition": "Atteindre le rang S"},
+        ]
+    for ach in achievements:
         await db.achievements.insert_one({
             "id": str(uuid.uuid4()),
             "title": ach.get("title", "Achievement"),
