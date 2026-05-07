@@ -90,28 +90,28 @@ export default function Awakening({ onInitiated }) {
           data-testid="awakening-intro"
         >
           <div className="font-accent text-xs tracking-[0.5em] text-cyan-300/70 mb-4">
-            [ SYSTEM // PROTOCOLE D'ÉVEIL ]
+            [ SEUIL · RENAISSANCE · LÉGENDE ]
           </div>
           <h1 className="font-display text-4xl sm:text-5xl lg:text-6xl font-black uppercase mb-6 text-transparent bg-clip-text bg-gradient-to-r from-cyan-200 via-cyan-400 to-blue-600 tracking-tighter">
-            Tu as été<br />choisi, Hunter
+            Tu te tiens<br />sur un seuil
           </h1>
           <p className="text-slate-300 mb-3 max-w-lg mx-auto leading-relaxed">
-            Le <span className="text-cyan-300 glow-text">SYSTEM</span> va dialoguer avec toi.
-            Pas de formulaire — une vraie conversation pour comprendre qui tu es,
-            ce que tu portes, ce que tu cherches à devenir.
+            Avant tout chemin, une cartographie. <span className="text-cyan-300 glow-text">The System</span>
+            {" "}va dialoguer avec toi en profondeur — qui tu es, ce que tu portes,
+            ce que ton vivant cherche à devenir. C'est l'entrée dans ta légende personnelle.
           </p>
           <p className="text-slate-500 text-sm mb-10 font-mono">
-            &gt; identité · ombres · corps · valeurs · vision · réel
+            identité · ombres · corps · vérité · vision · réel
           </p>
           <button
             data-testid="start-awakening-btn"
             onClick={handleStart}
             className="sys-btn inline-flex items-center gap-2"
           >
-            <Sparkles size={14} /> Initier l'éveil
+            <Sparkles size={14} /> Franchir le seuil
           </button>
           <p className="text-slate-600 text-xs mt-6 font-mono">
-            La conversation prendra ~10-15 échanges. Réponds en vérité.
+            La traversée prend ~10 à 15 échanges. Réponds en vérité, sans te censurer.
           </p>
         </motion.div>
       </div>
@@ -126,10 +126,10 @@ export default function Awakening({ onInitiated }) {
         <div className="border-b border-cyan-500/20 px-6 py-4 flex items-center justify-between">
           <div>
             <div className="font-accent text-[10px] tracking-[0.4em] text-cyan-300/70 uppercase">
-              [ SYSTEM // ÉVEIL EN COURS ]
+              [ TRAVERSÉE EN COURS ]
             </div>
             <div className="font-display text-lg font-bold text-cyan-300 glow-text">
-              Dialogue avec le SYSTEM
+              Dialogue avec The System
             </div>
           </div>
           <div className="font-mono text-xs text-slate-500 flex items-center gap-3">
@@ -196,7 +196,7 @@ export default function Awakening({ onInitiated }) {
                 <div className="flex items-center gap-2 text-cyan-300 text-sm">
                   <Loader2 size={14} className="animate-spin" />
                   <span className="font-mono">
-                    {finalizing ? "génération de ton architecture..." : "analyse en cours..."}
+                    {finalizing ? "tissage de ton architecture..." : "écoute en profondeur..."}
                   </span>
                 </div>
               </div>
@@ -213,7 +213,7 @@ export default function Awakening({ onInitiated }) {
               autoFocus
               rows={2}
               className="sys-input resize-none flex-1"
-              placeholder={thinking ? "Le SYSTEM réfléchit..." : "Réponds en vérité..."}
+              placeholder={thinking ? "Le seuil écoute..." : "Réponds en vérité..."}
               value={input}
               disabled={thinking || finalizing}
               onChange={(e) => setInput(e.target.value)}
