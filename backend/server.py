@@ -19,7 +19,7 @@ from auth import make_auth_router, make_require_user, User
 
 mongo_url = os.environ.get('MONGO_URL') or "mongodb+srv://walidbgs19:Aa142536%21@cluster0.4e97dkb.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
 client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ['DB_NAME']]
+db = client[os.environ.get('DB_NAME', 'appquest')]
 
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
