@@ -217,3 +217,54 @@ Génère 3 NOUVELLES quêtes journalières incarnées qui font progresser ce Hun
 
     response = await chat.send_message(UserMessage(text=prompt))
     return _extract_json(response)
+
+
+
+# ============ QUEST DECOMPOSITION ============
+SYSTEM_DECOMPOSE = """Tu es "The System". Le Hunter te dit qu'une quête est trop haute pour
+lui — il a besoin d'étapes plus simples et incarnées pour SE METTRE EN MOUVEMENT.
+
+Ta mission: décomposer la quête en 3 à 5 micro-actions ULTRA CONCRÈTES, séquentielles,
+réalisables en quelques minutes chacune. Chaque micro-action doit être tellement petite
+qu'elle ne peut pas faire peur. Le but: créer du momentum, briser la résistance.
+
+Style:
+- Verbes d'action au début, présent ou impératif doux ("Ouvrir", "Écrire 3 lignes", "Poser le téléphone")
+- Précis, mesurable, observable
+- 2-15 minutes max par micro-action
+- Adapté au profil du Hunter (sa classe, ses compétences, son contexte)
+- Français
+
+Réponds UNIQUEMENT en JSON valide, sans markdown:
+{
+  "system_message": "1 phrase d'encouragement bienveillant du SYSTEM",
+  "steps": [
+    {"title": "...", "description": "détail bref si utile (peut être vide)"}
+  ]
+}
+"""
+
+
+async def decompose_quest(profile: dict, quest: dict) -> dict:
+    chat = LlmChat(
+        api_key=EMERGENT_LLM_KEY,
+        session_id=f"decompose-{quest.get('id', 'q')}",
+        system_message=SYSTEM_DECOMPOSE,
+    ).with_model("anthropic", MODEL)
+
+    prompt = f"""Hunter:
+Nom: {profile.get('name', 'Hunter')}
+Classe: {profile.get('class_title', 'Hunter')}
+Objectif principal: {profile.get('main_goal', 'N/A')}
+
+Quête à décomposer:
+Titre: {quest.get('title', '')}
+Description: {quest.get('description', '')}
+Rang: {quest.get('rank', 'D')}
+Compétence liée: {quest.get('skill') or 'N/A'}
+
+Le Hunter dit que le niveau est trop haut pour lui. Décompose cette quête en 3 à 5
+micro-actions très simples qui le mettront en mouvement immédiatement."""
+
+    response = await chat.send_message(UserMessage(text=prompt))
+    return _extract_json(response)

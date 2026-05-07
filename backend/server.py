@@ -14,7 +14,7 @@ from datetime import datetime, timezone, date
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
-from ai_system import awaken_chat_turn, generate_daily_quests
+from ai_system import awaken_chat_turn, generate_daily_quests, decompose_quest
 
 mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
@@ -82,6 +82,13 @@ class ProfileOut(BaseModel):
     created_at: str
 
 
+class Step(BaseModel):
+    id: str
+    title: str
+    description: str = ""
+    done: bool = False
+
+
 class QuestOut(BaseModel):
     id: str
     title: str
@@ -94,6 +101,7 @@ class QuestOut(BaseModel):
     completed_at: Optional[str] = None
     created_at: str
     date_for: Optional[str] = None  # for daily quests: YYYY-MM-DD
+    steps: List[Step] = []
 
 
 class SkillOut(BaseModel):
@@ -488,6 +496,10 @@ async def list_quests(type: Optional[str] = None, status: Optional[str] = None):
 
 @api_router.post("/quests/{quest_id}/complete", response_model=CompleteResult)
 async def complete_quest(quest_id: str):
+    return await _complete_quest_internal(quest_id)
+
+
+async def _complete_quest_internal(quest_id: str) -> "CompleteResult":
     q = await db.quests.find_one({"id": quest_id}, {"_id": 0})
     if not q:
         raise HTTPException(status_code=404, detail="Quest not found")
@@ -531,6 +543,92 @@ async def complete_quest(quest_id: str):
         new_level=new_stats.level if leveled_up else None,
         new_rank=new_stats.rank if leveled_up else None,
         unlocked_achievements=[AchievementOut(**a) for a in newly_unlocked],
+    )
+
+
+class StepToggleReq(BaseModel):
+    done: bool
+
+
+class DecomposeOut(BaseModel):
+    quest: QuestOut
+    system_message: str
+
+
+@api_router.post("/quests/{quest_id}/decompose", response_model=DecomposeOut)
+async def decompose_quest_endpoint(quest_id: str):
+    """Ask AI to break the quest into 3-5 simpler micro-actions."""
+    q = await db.quests.find_one({"id": quest_id}, {"_id": 0})
+    if not q:
+        raise HTTPException(status_code=404, detail="Quest not found")
+    if q["status"] == "completed":
+        raise HTTPException(status_code=400, detail="Quest already completed")
+
+    profile = await get_profile_doc() or {}
+    try:
+        result = await decompose_quest(profile, q)
+    except Exception as e:
+        logger.exception("decompose failed")
+        raise HTTPException(status_code=500, detail=f"Decomposition failed: {str(e)}")
+
+    raw_steps = result.get("steps", []) or []
+    steps = [
+        {
+            "id": str(uuid.uuid4()),
+            "title": s.get("title", "Étape"),
+            "description": s.get("description", ""),
+            "done": False,
+        }
+        for s in raw_steps
+    ]
+    if not steps:
+        raise HTTPException(status_code=500, detail="AI returned no steps")
+
+    await db.quests.update_one({"id": quest_id}, {"$set": {"steps": steps}})
+    q = await db.quests.find_one({"id": quest_id}, {"_id": 0})
+    return DecomposeOut(
+        quest=QuestOut(**q),
+        system_message=result.get("system_message", "Décompose. Avance pas à pas."),
+    )
+
+
+class StepToggleResult(BaseModel):
+    quest: QuestOut
+    auto_completed: bool = False
+    completion: Optional[CompleteResult] = None
+
+
+@api_router.patch("/quests/{quest_id}/steps/{step_id}", response_model=StepToggleResult)
+async def toggle_step(quest_id: str, step_id: str, req: StepToggleReq):
+    q = await db.quests.find_one({"id": quest_id}, {"_id": 0})
+    if not q:
+        raise HTTPException(status_code=404, detail="Quest not found")
+    steps = q.get("steps") or []
+    if not steps:
+        raise HTTPException(status_code=400, detail="Quest has no steps")
+
+    found = False
+    for s in steps:
+        if s["id"] == step_id:
+            s["done"] = bool(req.done)
+            found = True
+            break
+    if not found:
+        raise HTTPException(status_code=404, detail="Step not found")
+
+    await db.quests.update_one({"id": quest_id}, {"$set": {"steps": steps}})
+
+    auto_completed = False
+    completion: Optional[CompleteResult] = None
+    if all(s["done"] for s in steps) and q["status"] == "active":
+        completion = await _complete_quest_internal(quest_id)
+        auto_completed = True
+
+    updated = await db.quests.find_one({"id": quest_id}, {"_id": 0})
+    return StepToggleResult(
+        quest=QuestOut(**updated),
+        auto_completed=auto_completed,
+        completion=completion,
     )
 
 

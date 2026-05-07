@@ -1,0 +1,21 @@
+{
+  "name": "Hunter Protocol — SYSTEM",
+  "short_name": "SYSTEM",
+  "description": "Outil de transformation holistique inspiré de Solo Leveling. Quêtes IA personnalisées, rangs E→S, renaissance.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#05050A",
+  "theme_color": "#00E5FF",
+  "lang": "fr",
+  "categories": ["lifestyle", "productivity", "education"],
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

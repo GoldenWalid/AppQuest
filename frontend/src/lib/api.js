@@ -14,6 +14,9 @@ export const api = {
     return axios.get(`${API}/quests`, { params }).then(r => r.data);
   },
   completeQuest: (id) => axios.post(`${API}/quests/${id}/complete`).then(r => r.data),
+  decomposeQuest: (id) => axios.post(`${API}/quests/${id}/decompose`).then(r => r.data),
+  toggleStep: (questId, stepId, done) =>
+    axios.patch(`${API}/quests/${questId}/steps/${stepId}`, { done }).then(r => r.data),
   genDaily: () => axios.post(`${API}/quests/generate-daily`).then(r => r.data),
   getSkills: () => axios.get(`${API}/skills`).then(r => r.data),
   getAchievements: () => axios.get(`${API}/achievements`).then(r => r.data),
