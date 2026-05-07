@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
-import { Swords, Trophy, Bell, RotateCcw, LayoutDashboard } from "lucide-react";
+import { Swords, Trophy, Bell, RotateCcw, LayoutDashboard, LogOut } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import ReminderSettings from "@/components/ReminderSettings";
 import { useDailyReminder } from "@/hooks/useDailyReminder";
+import { useAuth } from "@/context/AuthContext";
 
 const navItems = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, testid: "nav-dashboard" },
@@ -15,26 +16,47 @@ const navItems = [
 export default function Shell({ profile, children, onProfileChange }) {
   const navigate = useNavigate();
   const [reminderOpen, setReminderOpen] = useState(false);
-  // initialize daily reminder scheduling at app shell mount
+  const { user, logout } = useAuth();
   useDailyReminder();
 
   const handleReset = async () => {
-    if (!window.confirm("Réinitialiser tout le SYSTEM ? Cette action est irréversible.")) return;
+    if (!window.confirm("Réinitialiser ta traversée ? Cette action est irréversible.")) return;
     await api.reset();
     onProfileChange && onProfileChange();
     navigate("/awakening");
-    toast.success("SYSTEM réinitialisé");
+    toast.success("Traversée réinitialisée");
+  };
+
+  const handleLogout = async () => {
+    await logout();
+    navigate("/login", { replace: true });
   };
 
   return (
     <div className="min-h-screen flex flex-col lg:flex-row relative z-10">
-      {/* Sidebar */}
       <aside className="lg:w-64 border-b lg:border-b-0 lg:border-r border-cyan-500/20 bg-black/40 backdrop-blur-xl">
         <div className="p-6">
           <div className="font-accent text-[10px] tracking-[0.5em] text-cyan-300/70 mb-1">[ SYSTEM ]</div>
           <div className="font-display text-xl font-black text-cyan-300 glow-text uppercase" data-testid="app-title">
             Hunter Protocol
           </div>
+
+          {user && (
+            <div className="mt-4 flex items-center gap-3" data-testid="user-card">
+              {user.picture ? (
+                <img src={user.picture} alt={user.name} className="w-9 h-9 border border-cyan-500/30" />
+              ) : (
+                <div className="w-9 h-9 border border-cyan-500/30 bg-cyan-500/10 flex items-center justify-center text-cyan-300 font-display font-bold text-sm">
+                  {(user.name || "?").charAt(0).toUpperCase()}
+                </div>
+              )}
+              <div className="min-w-0">
+                <div className="text-cyan-100 text-sm font-mono truncate">{user.name}</div>
+                <div className="text-slate-500 text-[10px] truncate">{user.email}</div>
+              </div>
+            </div>
+          )}
+
           {profile?.class_title && (
             <div className="mt-4 p-3 border border-cyan-500/20 bg-black/50" data-testid="profile-class-card">
               <div className="text-[10px] tracking-[0.2em] text-cyan-300/60 uppercase">Classe</div>
@@ -44,6 +66,7 @@ export default function Shell({ profile, children, onProfileChange }) {
             </div>
           )}
         </div>
+
         <nav className="px-3 flex lg:flex-col gap-1">
           {navItems.map(({ to, label, icon: Icon, testid }) => (
             <NavLink
@@ -63,6 +86,7 @@ export default function Shell({ profile, children, onProfileChange }) {
             </NavLink>
           ))}
         </nav>
+
         <div className="mt-6 p-4 space-y-2 border-t border-cyan-500/10">
           <button
             data-testid="enable-notif-btn"
@@ -76,12 +100,18 @@ export default function Shell({ profile, children, onProfileChange }) {
             onClick={handleReset}
             className="w-full flex items-center gap-2 text-xs uppercase tracking-widest text-slate-500 hover:text-red-400 transition py-2"
           >
-            <RotateCcw size={14} /> Reset System
+            <RotateCcw size={14} /> Réinitialiser
+          </button>
+          <button
+            data-testid="logout-btn"
+            onClick={handleLogout}
+            className="w-full flex items-center gap-2 text-xs uppercase tracking-widest text-slate-500 hover:text-cyan-300 transition py-2"
+          >
+            <LogOut size={14} /> Se déconnecter
           </button>
         </div>
       </aside>
 
-      {/* Main */}
       <main className="flex-1 p-4 sm:p-8 max-w-6xl">{children}</main>
 
       <ReminderSettings open={reminderOpen} onClose={() => setReminderOpen(false)} />

@@ -1,0 +1,36 @@
+{
+  "summary": "Tested major multi-user auth refactor (Emergent Google OAuth). Backend: 21/21 pytest passed (auth-required endpoints, isolation, logout, session exchange). Frontend: login redirect, cookie-based auth, ProfileGate routing, sidebar user-card, logout, and User-A/User-B isolation all verified via Playwright. Found and fixed one critical 500 bug: User.created_at validation when seeded via mongosh new Date() (BSON datetime).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_multiuser_auth.py",
+    "/app/test_reports/pytest/iteration_6.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "auth.py User.created_at was Optional[str] only — broke /api/auth/me with 500 when users were mongosh-seeded with `new Date()` per /app/auth_testing.md (BSON Date -> Python datetime fails Pydantic str validation). Fixed by coercing datetime->isoformat in make_require_user before constructing User. Real OAuth flow already stored isoformat strings so production users were unaffected, but the documented testing playbook would 500 every time.",
+    "server.py is 668 lines and could be split into routers (auth done; quests/profile/stats/awakening could move to separate modules) for maintainability.",
+    "compute_stats() is called twice inside _complete_quest_internal (before & after); plus once again from check_achievements. Three full re-aggregations per quest completion. Acceptable now; flag for optimisation as data grows.",
+    "session_exchange does not validate that response from EMERGENT_OAUTH_SESSION_URL contains required keys (email, session_token) — a malformed upstream response would 500 instead of 401. Low risk but worth a guard."
+  ],
+  "updated_files": [
+    "/app/backend/auth.py",
+    "/app/backend/tests/test_multiuser_auth.py",
+    "/app/memory/test_credentials.md"
+  ],
+  "success_rate": {"backend": "100% (21/21)", "frontend": "100% (all flows: login redirect, cookie auth, ProfileGate, dashboard sidebar, navigation, logout, isolation)"},
+  "test_credentials": "Mongosh-seeded test users in /app/memory/test_credentials.md. USER_A token=test_session_A_1778158753850 (has profile seeded), USER_B token=test_session_B_1778158753850 (no profile, hits ProfileGate -> /awakening). Frontend cookies: domain=xp-goal.preview.emergentagent.com path=/ httpOnly secure sameSite=None.",
+  "seed_data_creation": "Two users + sessions seeded directly via mongosh. User A also got a profile doc seeded so dashboard renders. Pytest fixtures create their own TEST_-prefixed users and clean up after the run.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "main_agent_can_self_test": false,
+  "context_for_next_testing_agent": "Multi-user auth refactor verified end-to-end. Backend test file: /app/backend/tests/test_multiuser_auth.py covers (a) all protected endpoints return 401 unauthed, (b) Bearer-token /me works, (c) two-user isolation via direct mongo seeding, (d) cross-user complete returns 404, (e) /api/reset is user-scoped, (f) logout invalidates session, (g) /auth/session with bogus session_id -> 401. Real Google OAuth flow can NOT be exercised in automation; cookie injection from mongosh-seeded sessions is the only path. Fix applied: auth.py:_dep now coerces datetime created_at to isoformat string before constructing User pydantic model. Re-run command: REACT_APP_BACKEND_URL=$(grep REACT_APP_BACKEND_URL frontend/.env | cut -d= -f2) python -m pytest backend/tests/test_multiuser_auth.py -v",
+  "rca of the issue": "Symptom: /api/auth/me returned 500 for any mongosh-seeded test user, blocking entire frontend auth testing. Root cause: backend/auth.py User pydantic model declared created_at: Optional[str], but the auth_testing.md playbook seeds users with MongoDB `new Date()` which Motor returns to Python as a datetime instance — Pydantic v2 strict-mode rejects datetime as str. Real-flow OAuth path was unaffected because session_exchange._upsert_user calls .isoformat() before insert. Fix: in make_require_user, convert created_at to isoformat string if it is a datetime, before User(**user_doc). Verified: /me returns 200 with cookie + ProfileGate + Dashboard render correctly."
+}
