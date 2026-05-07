@@ -135,7 +135,6 @@ export default function ReminderSettings({ open, onClose }) {
                   data-testid="reminder-save-btn"
                   onClick={() => save(cfg)}
                   className="sys-btn flex-1"
-                  disabled={!cfg.enabled}
                 >
                   Enregistrer l'heure
                 </button>
@@ -153,6 +152,11 @@ export default function ReminderSettings({ open, onClose }) {
               Statut: {cfg.enabled ? `Programmé · ${cfg.time}` : "Désactivé"}
               {" · "}
               Permission: {perm}
+            </div>
+            <div className="mt-2 text-[10px] text-slate-600 font-mono leading-relaxed">
+              Le rappel se déclenche tant que l'application est ouverte (onglet ou
+              PWA installée). Pour des rappels persistants 100% offline, garde le
+              SYSTEM en arrière-plan.
             </div>
           </motion.div>
         </>

@@ -60,7 +60,7 @@ export default function Dashboard({ profile }) {
         <StatTile icon={Activity} label="Level" value={stats.level} testid="stat-level" />
         <StatTile icon={Target} label="XP Total" value={stats.total_xp} testid="stat-xp" />
         <StatTile icon={Trophy} label="Quêtes" value={stats.quests_completed} testid="stat-quests" />
-        <StatTile icon={Flame} label="Streak" value={`${stats.daily_streak}j`} testid="stat-streak" />
+        <StatTile icon={Flame} label="Streak" value={`${stats.daily_streak ?? 0}j`} testid="stat-streak" />
       </div>
 
       {/* XP BAR */}
