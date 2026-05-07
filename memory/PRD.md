@@ -66,3 +66,12 @@ Application de quêtes style Solo Leveling. L'utilisateur rentre son profil, son
   - Quand toutes les steps sont cochées → quête auto-complétée + XP + level-up modal.
 - Helper `_complete_quest_internal()` extrait pour DRY (utilisé par /complete et auto-complete).
 - iter 5 tests: backend 10/10 + frontend 100% (decompose E2E, auto-complete + level-up E2E, PWA manifest servi).
+
+## Update 2026-02-07 (iter 6) — MULTI-USER avec Emergent Google OAuth
+- Refactor majeur: app passe de mono-user singleton à multi-utilisateur scopé par `user_id`.
+- Backend: `auth.py` (sessions httpOnly cookie + Bearer fallback), routes `/api/auth/session`, `/api/auth/me`, `/api/auth/logout`. Toutes les routes app exigent `Depends(require_user)`. Toutes les requêtes Mongo filtrées par `user_id`.
+- Collections: nouveau `users` + `user_sessions`; `profile/quests/skills/achievements` portent désormais un `user_id`.
+- Frontend: `AuthContext` (skip /me check si hash contient session_id), `Login` (redirect auth.emergentagent.com), `AuthCallback` (synchronous hash detect + useRef), `ProtectedRoute` (3-state pattern), `ProfileGate` (redirect /awakening si profil non initié), Shell affiche user-card + bouton logout.
+- CORS: `allow_origin_regex='.*'` + `allow_credentials=True` (compat cookies same-origin via ingress Emergent).
+- Tests iter 6: backend 21/21 (incl. isolation User-A vs User-B, cross-user complete 404, logout, session expiry), frontend 100% (login redirect, cookie auth, ProfileGate routing, sidebar user-card, navigation, logout).
+- Fix appliqué: `auth.py` coerce datetime → isoformat dans `make_require_user` pour les utilisateurs seedés via mongosh (real OAuth path déjà OK).
