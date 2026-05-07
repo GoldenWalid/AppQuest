@@ -1,72 +1,492 @@
-from fastapi import FastAPI, APIRouter
+from fastapi import FastAPI, APIRouter, HTTPException
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
 from pathlib import Path
-from pydantic import BaseModel, Field, ConfigDict
-from typing import List
+from pydantic import BaseModel, Field
+from typing import List, Optional
 import uuid
-from datetime import datetime, timezone
-
+from datetime import datetime, timezone, date
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
-# MongoDB connection
+from ai_system import awaken_system, generate_daily_quests
+
 mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
-# Create the main app without a prefix
 app = FastAPI()
-
-# Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
 
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
 
-# Define Models
-class StatusCheck(BaseModel):
-    model_config = ConfigDict(extra="ignore")  # Ignore MongoDB's _id field
-    
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    client_name: str
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
-class StatusCheckCreate(BaseModel):
-    client_name: str
+# ============ MODELS ============
 
-# Add your routes to the router instead of directly to app
+def now_iso():
+    return datetime.now(timezone.utc).isoformat()
+
+
+RANK_ORDER = ["E", "D", "C", "B", "A", "S"]
+
+
+def level_from_xp(total_xp: int) -> int:
+    # Level N requires N*N*100 total XP
+    lvl = 1
+    while (lvl * lvl * 100) <= total_xp:
+        lvl += 1
+    return lvl
+
+
+def xp_for_level(level: int) -> int:
+    return level * level * 100
+
+
+def rank_from_level(level: int) -> str:
+    if level < 5:
+        return "E"
+    if level < 10:
+        return "D"
+    if level < 15:
+        return "C"
+    if level < 20:
+        return "B"
+    if level < 25:
+        return "A"
+    return "S"
+
+
+class ProfileInit(BaseModel):
+    name: str
+    about_me: str = ""
+    main_goal: str
+    context: str = ""
+
+
+class ProfileOut(BaseModel):
+    id: str
+    name: str
+    about_me: str
+    main_goal: str
+    context: str
+    class_title: str
+    system_message: str
+    initiated: bool
+    created_at: str
+
+
+class QuestOut(BaseModel):
+    id: str
+    title: str
+    description: str
+    xp_reward: int
+    rank: str
+    status: str  # active | completed
+    type: str    # main | sub | parallel | daily
+    skill: Optional[str] = None
+    completed_at: Optional[str] = None
+    created_at: str
+    date_for: Optional[str] = None  # for daily quests: YYYY-MM-DD
+
+
+class SkillOut(BaseModel):
+    id: str
+    name: str
+    description: str
+    icon: str
+    level: int
+    xp: int
+    xp_to_next: int
+
+
+class AchievementOut(BaseModel):
+    id: str
+    title: str
+    description: str
+    rank: str
+    condition: str
+    unlocked: bool
+    unlocked_at: Optional[str] = None
+
+
+class StatsOut(BaseModel):
+    total_xp: int
+    level: int
+    xp_current_level: int
+    xp_next_level: int
+    xp_into_level: int
+    xp_needed_for_next: int
+    rank: str
+    quests_completed: int
+    daily_streak: int
+    attributes: dict
+
+
+class CompleteResult(BaseModel):
+    quest: QuestOut
+    xp_gained: int
+    leveled_up: bool
+    new_level: Optional[int] = None
+    new_rank: Optional[str] = None
+    unlocked_achievements: List[AchievementOut] = []
+
+
+# ============ HELPERS ============
+
+PROFILE_KEY = "singleton"
+
+
+async def get_profile_doc():
+    return await db.profile.find_one({"_id": PROFILE_KEY}, {"_id": 0})
+
+
+async def compute_stats() -> StatsOut:
+    quests = await db.quests.find({"status": "completed"}, {"_id": 0}).to_list(5000)
+    total_xp = sum(q.get("xp_reward", 0) for q in quests)
+    level = level_from_xp(total_xp)
+    xp_curr = xp_for_level(level)
+    xp_next = xp_for_level(level + 1)
+    # streak
+    today = date.today()
+    streak = 0
+    days_back = 0
+    while days_back < 365:
+        d = today.fromordinal(today.toordinal() - days_back).isoformat()
+        any_for_day = any(
+            q.get("type") == "daily" and q.get("date_for") == d and q.get("status") == "completed"
+            for q in quests
+        )
+        if any_for_day:
+            streak += 1
+            days_back += 1
+        else:
+            if days_back == 0:
+                days_back += 1  # allow today as not yet done
+                continue
+            break
+
+    # attributes derived from skills
+    skills = await db.skills.find({}, {"_id": 0}).to_list(1000)
+    attributes = {s["name"]: s["level"] for s in skills}
+
+    return StatsOut(
+        total_xp=total_xp,
+        level=level,
+        xp_current_level=xp_curr,
+        xp_next_level=xp_next,
+        xp_into_level=total_xp - xp_curr,
+        xp_needed_for_next=xp_next - xp_curr,
+        rank=rank_from_level(level),
+        quests_completed=len(quests),
+        daily_streak=streak,
+        attributes=attributes,
+    )
+
+
+async def check_achievements() -> List[dict]:
+    """Check and unlock achievements based on current stats. Returns newly unlocked."""
+    stats = await compute_stats()
+    locked = await db.achievements.find({"unlocked": False}, {"_id": 0}).to_list(500)
+    newly = []
+    for ach in locked:
+        cond = ach.get("condition", "").lower()
+        rank = ach.get("rank", "E")
+        rank_threshold = {"E": 1, "D": 5, "C": 10, "B": 15, "A": 20, "S": 25}.get(rank, 1)
+        unlock = False
+        # simple heuristic: rank-based level threshold OR quest count thresholds
+        if stats.level >= rank_threshold:
+            # also require some completed quests commensurate
+            if stats.quests_completed >= max(1, rank_threshold // 2):
+                unlock = True
+        if "streak" in cond and stats.daily_streak >= 3:
+            unlock = True
+        if "première" in cond or "first" in cond:
+            if stats.quests_completed >= 1:
+                unlock = True
+        if unlock:
+            await db.achievements.update_one(
+                {"id": ach["id"]},
+                {"$set": {"unlocked": True, "unlocked_at": now_iso()}},
+            )
+            ach["unlocked"] = True
+            ach["unlocked_at"] = now_iso()
+            newly.append(ach)
+    return newly
+
+
+# ============ ROUTES ============
+
 @api_router.get("/")
 async def root():
-    return {"message": "Hello World"}
+    return {"message": "SYSTEM ONLINE"}
 
-@api_router.post("/status", response_model=StatusCheck)
-async def create_status_check(input: StatusCheckCreate):
-    status_dict = input.model_dump()
-    status_obj = StatusCheck(**status_dict)
-    
-    # Convert to dict and serialize datetime to ISO string for MongoDB
-    doc = status_obj.model_dump()
-    doc['timestamp'] = doc['timestamp'].isoformat()
-    
-    _ = await db.status_checks.insert_one(doc)
-    return status_obj
 
-@api_router.get("/status", response_model=List[StatusCheck])
-async def get_status_checks():
-    # Exclude MongoDB's _id field from the query results
-    status_checks = await db.status_checks.find({}, {"_id": 0}).to_list(1000)
-    
-    # Convert ISO string timestamps back to datetime objects
-    for check in status_checks:
-        if isinstance(check['timestamp'], str):
-            check['timestamp'] = datetime.fromisoformat(check['timestamp'])
-    
-    return status_checks
+@api_router.get("/profile", response_model=Optional[ProfileOut])
+async def get_profile():
+    doc = await get_profile_doc()
+    if not doc:
+        return None
+    return ProfileOut(**doc)
 
-# Include the router in the main app
+
+@api_router.post("/profile/initiate", response_model=ProfileOut)
+async def initiate_profile(data: ProfileInit):
+    pid = str(uuid.uuid4())
+    profile = {
+        "id": pid,
+        "name": data.name,
+        "about_me": data.about_me,
+        "main_goal": data.main_goal,
+        "context": data.context,
+    }
+
+    # Call AI
+    try:
+        arch = await awaken_system(profile)
+    except Exception as e:
+        logger.exception("AI awaken failed")
+        raise HTTPException(status_code=500, detail=f"System awakening failed: {str(e)}")
+
+    profile.update({
+        "class_title": arch.get("class_title", "Hunter"),
+        "system_message": arch.get("system_message", "Welcome, Hunter."),
+        "initiated": True,
+        "created_at": now_iso(),
+    })
+
+    # Reset collections first
+    await db.profile.delete_many({})
+    await db.quests.delete_many({})
+    await db.skills.delete_many({})
+    await db.achievements.delete_many({})
+
+    await db.profile.insert_one({"_id": PROFILE_KEY, **profile})
+
+    # Save skills
+    for s in arch.get("parallel_skills", []):
+        skill = {
+            "id": str(uuid.uuid4()),
+            "name": s.get("name", "Skill"),
+            "description": s.get("description", ""),
+            "icon": s.get("icon", "star"),
+            "level": 1,
+            "xp": 0,
+            "xp_to_next": 100,
+        }
+        await db.skills.insert_one(skill)
+
+    # Save main quest
+    mq = arch.get("main_quest", {})
+    await db.quests.insert_one({
+        "id": str(uuid.uuid4()),
+        "title": mq.get("title", "Main Goal"),
+        "description": mq.get("description", ""),
+        "xp_reward": mq.get("xp_reward", 5000),
+        "rank": mq.get("rank", "S"),
+        "status": "active",
+        "type": "main",
+        "skill": None,
+        "completed_at": None,
+        "created_at": now_iso(),
+        "date_for": None,
+    })
+
+    # Save sub goals
+    for sg in arch.get("sub_goals", []):
+        await db.quests.insert_one({
+            "id": str(uuid.uuid4()),
+            "title": sg.get("title", "Sub-goal"),
+            "description": sg.get("description", ""),
+            "xp_reward": sg.get("xp_reward", 500),
+            "rank": sg.get("rank", "A"),
+            "status": "active",
+            "type": "sub",
+            "skill": sg.get("skill"),
+            "completed_at": None,
+            "created_at": now_iso(),
+            "date_for": None,
+        })
+
+    # Parallel objectives
+    for po in arch.get("parallel_objectives", []):
+        await db.quests.insert_one({
+            "id": str(uuid.uuid4()),
+            "title": po.get("title", "Parallel"),
+            "description": po.get("description", ""),
+            "xp_reward": po.get("xp_reward", 600),
+            "rank": po.get("rank", "B"),
+            "status": "active",
+            "type": "parallel",
+            "skill": po.get("skill"),
+            "completed_at": None,
+            "created_at": now_iso(),
+            "date_for": None,
+        })
+
+    # Initial daily quests
+    today_str = date.today().isoformat()
+    for dq in arch.get("initial_daily_quests", []):
+        await db.quests.insert_one({
+            "id": str(uuid.uuid4()),
+            "title": dq.get("title", "Daily"),
+            "description": dq.get("description", ""),
+            "xp_reward": dq.get("xp_reward", 100),
+            "rank": dq.get("rank", "D"),
+            "status": "active",
+            "type": "daily",
+            "skill": dq.get("skill"),
+            "completed_at": None,
+            "created_at": now_iso(),
+            "date_for": today_str,
+        })
+
+    # Achievements
+    for ach in arch.get("achievements", []):
+        await db.achievements.insert_one({
+            "id": str(uuid.uuid4()),
+            "title": ach.get("title", "Achievement"),
+            "description": ach.get("description", ""),
+            "rank": ach.get("rank", "E"),
+            "condition": ach.get("condition", ""),
+            "unlocked": False,
+            "unlocked_at": None,
+        })
+
+    return ProfileOut(**profile)
+
+
+@api_router.get("/stats", response_model=StatsOut)
+async def stats():
+    return await compute_stats()
+
+
+@api_router.get("/quests", response_model=List[QuestOut])
+async def list_quests(type: Optional[str] = None, status: Optional[str] = None):
+    q = {}
+    if type:
+        q["type"] = type
+    if status:
+        q["status"] = status
+    docs = await db.quests.find(q, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    # filter daily to today only
+    if type == "daily":
+        today_str = date.today().isoformat()
+        docs = [d for d in docs if d.get("date_for") == today_str]
+    return [QuestOut(**d) for d in docs]
+
+
+@api_router.post("/quests/{quest_id}/complete", response_model=CompleteResult)
+async def complete_quest(quest_id: str):
+    q = await db.quests.find_one({"id": quest_id}, {"_id": 0})
+    if not q:
+        raise HTTPException(status_code=404, detail="Quest not found")
+    if q["status"] == "completed":
+        raise HTTPException(status_code=400, detail="Already completed")
+
+    prev_stats = await compute_stats()
+    prev_level = prev_stats.level
+
+    await db.quests.update_one(
+        {"id": quest_id},
+        {"$set": {"status": "completed", "completed_at": now_iso()}},
+    )
+
+    # award skill XP
+    if q.get("skill"):
+        skill = await db.skills.find_one({"name": q["skill"]}, {"_id": 0})
+        if skill:
+            skill_xp_gain = max(10, q["xp_reward"] // 5)
+            new_xp = skill["xp"] + skill_xp_gain
+            new_level = skill["level"]
+            xp_to_next = skill["xp_to_next"]
+            while new_xp >= xp_to_next:
+                new_xp -= xp_to_next
+                new_level += 1
+                xp_to_next = new_level * 100
+            await db.skills.update_one(
+                {"id": skill["id"]},
+                {"$set": {"xp": new_xp, "level": new_level, "xp_to_next": xp_to_next}},
+            )
+
+    new_stats = await compute_stats()
+    leveled_up = new_stats.level > prev_level
+    newly_unlocked = await check_achievements()
+
+    q = await db.quests.find_one({"id": quest_id}, {"_id": 0})
+    return CompleteResult(
+        quest=QuestOut(**q),
+        xp_gained=q["xp_reward"],
+        leveled_up=leveled_up,
+        new_level=new_stats.level if leveled_up else None,
+        new_rank=new_stats.rank if leveled_up else None,
+        unlocked_achievements=[AchievementOut(**a) for a in newly_unlocked],
+    )
+
+
+@api_router.post("/quests/generate-daily")
+async def gen_daily():
+    profile = await get_profile_doc()
+    if not profile:
+        raise HTTPException(status_code=400, detail="No profile")
+    skills = await db.skills.find({}, {"_id": 0}).to_list(100)
+    today_str = date.today().isoformat()
+    completed_today = await db.quests.count_documents(
+        {"type": "daily", "date_for": today_str, "status": "completed"}
+    )
+    try:
+        result = await generate_daily_quests(profile, skills, completed_today)
+    except Exception as e:
+        logger.exception("daily gen failed")
+        raise HTTPException(status_code=500, detail=f"Generation failed: {str(e)}")
+
+    created = []
+    for dq in result.get("daily_quests", []):
+        doc = {
+            "id": str(uuid.uuid4()),
+            "title": dq.get("title", "Daily"),
+            "description": dq.get("description", ""),
+            "xp_reward": dq.get("xp_reward", 100),
+            "rank": dq.get("rank", "D"),
+            "status": "active",
+            "type": "daily",
+            "skill": dq.get("skill"),
+            "completed_at": None,
+            "created_at": now_iso(),
+            "date_for": today_str,
+        }
+        await db.quests.insert_one(doc)
+        created.append(QuestOut(**doc))
+    return {"system_message": result.get("system_message", ""), "daily_quests": created}
+
+
+@api_router.get("/skills", response_model=List[SkillOut])
+async def list_skills():
+    docs = await db.skills.find({}, {"_id": 0}).to_list(100)
+    return [SkillOut(**d) for d in docs]
+
+
+@api_router.get("/achievements", response_model=List[AchievementOut])
+async def list_achievements():
+    docs = await db.achievements.find({}, {"_id": 0}).to_list(500)
+    # unlocked first
+    docs.sort(key=lambda d: (not d.get("unlocked", False), d.get("title", "")))
+    return [AchievementOut(**d) for d in docs]
+
+
+@api_router.post("/reset")
+async def reset_all():
+    await db.profile.delete_many({})
+    await db.quests.delete_many({})
+    await db.skills.delete_many({})
+    await db.achievements.delete_many({})
+    return {"ok": True}
+
+
 app.include_router(api_router)
 
 app.add_middleware(
@@ -77,12 +497,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
 
 @app.on_event("shutdown")
 async def shutdown_db_client():

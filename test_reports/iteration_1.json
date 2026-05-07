@@ -1,0 +1,42 @@
+{
+  "summary": "Tested Solo Leveling quest backend (15 pytest tests, 100% pass) and frontend awakening->dashboard->quests->achievements->reset flow. Backend AI integration with Claude Sonnet 4.5 works. Found 2 bugs: level_from_xp formula is off-by-one causing negative XP-into-level on dashboard, and achievements list empty after frontend awakening cycle.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "compute_stats / level_from_xp", "issue": "Level 2 triggers at 100 XP instead of 400 XP (N*N*100). Code uses `while (lvl*lvl*100) <= total_xp: lvl+=1`, so total_xp=100 yields level=2 with xp_into_level=100-400=-300. Dashboard shows '-100 / 300 XP'. Should compute thresholds as cumulative or use `(lvl+1)**2*100`.", "priority": "HIGH"},
+      {"endpoint": "POST /api/profile/initiate", "issue": "After UI awakening flow the achievements collection appeared empty (0 achievements) on /achievements page, though pytest awakening produced 6-10. Possibly Claude omitted 'achievements' field or insertion failure for that run. Needs reproduction.", "priority": "MEDIUM"}
+    ],
+    "minor": [
+      {"endpoint": "compute_stats", "issue": "Streak loop logic with `continue` inside `if days_back==0` branch may double-count or cause subtle off-by-one (not verified but code is fragile)."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Dashboard XP bar", "issue": "Displays negative XP value (e.g. -100 / 300 XP) right after first quest completion due to backend level math bug.", "selector": "[data-testid=\"xp-bar-container\"]", "priority": "HIGH"}
+    ],
+    "integration_issues": [
+      {"flow": "Awakening -> Dashboard redirect", "issue": "After navigate('/'), App.js refresh() may not have completed before route eval; navigation to / shows /awakening briefly. Test had to navigate manually. Consider awaiting refresh() in onInitiated before navigate.", "affected_selectors": ["[data-testid=\"dashboard\"]"]}
+    ],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/test_quest_system.py", "/app/test_reports/pytest/iteration_1.xml"],
+  "action_items": [
+    "Fix level_from_xp so level 2 needs 400 XP (use cumulative thresholds), to prevent negative xp_into_level.",
+    "Investigate why achievements were not generated/saved during the frontend-driven awakening run (verify Claude response for that session, add fallback if 'achievements' missing).",
+    "In Awakening.handleNext, await onInitiated() (refresh) before navigate('/') to avoid /awakening flash."
+  ],
+  "critical_code_review_comments": [
+    "level_from_xp threshold formula off-by-one (HIGH).",
+    "ai_system._extract_json may raise on non-JSON Claude output - server.py catches and returns 500 (acceptable but achievements silently empty if list missing).",
+    "compute_stats streak loop is hard to read; refactor with clear daily set lookup.",
+    "All endpoints correctly exclude Mongo _id via projection. Good.",
+    "CORS uses wildcard - acceptable for mono-user MVP."
+  ],
+  "updated_files": ["/app/backend/tests/test_quest_system.py"],
+  "success_rate": {"backend": "100% (15/15 pytest)", "frontend": "85% (core flows work; XP bar negative, achievements missing in 1 run)"},
+  "test_credentials": "n/a (mono-user, no auth)",
+  "seed_data_creation": "Tests POST /api/reset before/after; profile name prefixed TEST_Hunter.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend reachable at REACT_APP_BACKEND_URL. Awakening Claude call ~15-30s. Use /api/reset to clear state. After fixing level_from_xp, retest dashboard XP bar after completing one daily quest (should show 100/400 with level=1 still or appropriate).",
+  "rca of the issue": "level_from_xp loops `while (lvl*lvl*100) <= total_xp: lvl+=1`. Intended: level N requires accumulating N*N*100 XP, so xp_for_level(level) = level*level*100 is the threshold to enter that level. With total_xp=100, condition 1*1*100<=100 true => lvl=2 immediately. Dashboard then computes xp_into_level = 100 - xp_for_level(2)=100-400=-300. Should use threshold `(lvl)*(lvl)*100 <= total_xp` AND start lvl=1 with xp_for_level(level)=(level-1)*(level-1)*100, OR use cumulative formula. Recommended: `def level_from_xp(xp): lvl=1; while xp >= lvl*lvl*100: lvl+=1; return lvl` AND `xp_for_level(level)=(level-1)*(level-1)*100`."
+}

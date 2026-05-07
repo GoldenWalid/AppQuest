@@ -1,50 +1,98 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import "@/App.css";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import axios from "axios";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { Toaster } from "sonner";
+import Awakening from "@/pages/Awakening";
+import Dashboard from "@/pages/Dashboard";
+import Quests from "@/pages/Quests";
+import Achievements from "@/pages/Achievements";
+import Shell from "@/components/Shell";
+import { api } from "@/lib/api";
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-const API = `${BACKEND_URL}/api`;
+function App() {
+  const [profile, setProfile] = useState(null);
+  const [loaded, setLoaded] = useState(false);
 
-const Home = () => {
-  const helloWorldApi = async () => {
+  const refresh = async () => {
     try {
-      const response = await axios.get(`${API}/`);
-      console.log(response.data.message);
-    } catch (e) {
-      console.error(e, `errored out requesting / api`);
+      const p = await api.getProfile();
+      setProfile(p);
+    } catch (_) {
+      setProfile(null);
+    } finally {
+      setLoaded(true);
     }
   };
 
-  useEffect(() => {
-    helloWorldApi();
-  }, []);
+  useEffect(() => { refresh(); }, []);
 
-  return (
-    <div>
-      <header className="App-header">
-        <a
-          className="App-link"
-          href="https://emergent.sh"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <img src="https://avatars.githubusercontent.com/in/1201222?s=120&u=2686cf91179bbafbc7a71bfbc43004cf9ae1acea&v=4" />
-        </a>
-        <p className="mt-5">Building something incredible ~!</p>
-      </header>
-    </div>
-  );
-};
+  if (!loaded) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="font-accent text-cyan-300 tracking-[0.5em] uppercase text-xs animate-pulse">
+          [ SYSTEM BOOTING... ]
+        </div>
+      </div>
+    );
+  }
 
-function App() {
   return (
     <div className="App">
       <BrowserRouter>
+        <Toaster
+          position="top-right"
+          theme="dark"
+          toastOptions={{
+            style: {
+              background: "rgba(0,0,0,0.9)",
+              border: "1px solid rgba(0, 229, 255, 0.4)",
+              color: "#E2E8F0",
+              fontFamily: "JetBrains Mono, monospace",
+              boxShadow: "0 0 20px rgba(0, 229, 255, 0.15)",
+            },
+          }}
+        />
         <Routes>
-          <Route path="/" element={<Home />}>
-            <Route index element={<Home />} />
-          </Route>
+          <Route
+            path="/awakening"
+            element={<Awakening onInitiated={refresh} />}
+          />
+          <Route
+            path="/"
+            element={
+              profile?.initiated ? (
+                <Shell profile={profile} onProfileChange={refresh}>
+                  <Dashboard profile={profile} />
+                </Shell>
+              ) : (
+                <Navigate to="/awakening" replace />
+              )
+            }
+          />
+          <Route
+            path="/quests"
+            element={
+              profile?.initiated ? (
+                <Shell profile={profile} onProfileChange={refresh}>
+                  <Quests />
+                </Shell>
+              ) : (
+                <Navigate to="/awakening" replace />
+              )
+            }
+          />
+          <Route
+            path="/achievements"
+            element={
+              profile?.initiated ? (
+                <Shell profile={profile} onProfileChange={refresh}>
+                  <Achievements />
+                </Shell>
+              ) : (
+                <Navigate to="/awakening" replace />
+              )
+            }
+          />
         </Routes>
       </BrowserRouter>
     </div>
