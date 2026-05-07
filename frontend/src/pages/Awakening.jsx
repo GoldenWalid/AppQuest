@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, Loader2, Sparkles } from "lucide-react";
+import { Send, Loader2, Sparkles, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import axios from "axios";
 import { API } from "@/lib/api";
@@ -12,7 +12,7 @@ const newSessionId = () =>
 
 export default function Awakening({ onInitiated }) {
   const [started, setStarted] = useState(false);
-  const [sessionId] = useState(newSessionId);
+  const [sessionId, setSessionId] = useState(newSessionId);
   const [messages, setMessages] = useState([]); // [{role:'assistant'|'user', content}]
   const [input, setInput] = useState("");
   const [thinking, setThinking] = useState(false);
@@ -20,6 +20,16 @@ export default function Awakening({ onInitiated }) {
   const navigate = useNavigate();
   const scrollRef = useRef(null);
   const inputRef = useRef(null);
+
+  const handleRestart = async () => {
+    if (thinking || finalizing) return;
+    if (messages.length > 0 && !window.confirm("Recommencer la conversation depuis le début ?")) return;
+    setMessages([]);
+    setInput("");
+    setSessionId(newSessionId());
+    setStarted(false);
+    toast.success("Conversation réinitialisée");
+  };
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -122,8 +132,17 @@ export default function Awakening({ onInitiated }) {
               Dialogue avec le SYSTEM
             </div>
           </div>
-          <div className="font-mono text-xs text-slate-500">
-            {messages.filter(m => m.role === "user").length} réponse{messages.filter(m => m.role === "user").length !== 1 ? "s" : ""}
+          <div className="font-mono text-xs text-slate-500 flex items-center gap-3">
+            <span>{messages.filter(m => m.role === "user").length} réponse{messages.filter(m => m.role === "user").length !== 1 ? "s" : ""}</span>
+            <button
+              data-testid="awakening-restart-btn"
+              onClick={handleRestart}
+              disabled={thinking || finalizing}
+              className="inline-flex items-center gap-1 text-slate-500 hover:text-cyan-300 transition uppercase tracking-widest text-[10px] disabled:opacity-40"
+              title="Recommencer la conversation"
+            >
+              <RotateCcw size={12} /> Recommencer
+            </button>
           </div>
         </div>
 

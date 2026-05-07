@@ -9,6 +9,19 @@ import Achievements from "@/pages/Achievements";
 import Shell from "@/components/Shell";
 import { api } from "@/lib/api";
 
+function registerServiceWorker() {
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker
+      .register("/sw.js")
+      .catch((e) => console.warn("SW register failed:", e));
+    navigator.serviceWorker.addEventListener("message", (event) => {
+      if (event.data?.type === "OPEN_QUESTS") {
+        window.location.assign("/quests");
+      }
+    });
+  }
+}
+
 function App() {
   const [profile, setProfile] = useState(null);
   const [loaded, setLoaded] = useState(false);
@@ -24,7 +37,10 @@ function App() {
     }
   };
 
-  useEffect(() => { refresh(); }, []);
+  useEffect(() => {
+    refresh();
+    registerServiceWorker();
+  }, []);
 
   if (!loaded) {
     return (

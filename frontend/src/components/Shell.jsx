@@ -1,7 +1,10 @@
+import { useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
-import { Shield, Swords, Trophy, Bell, RotateCcw, LayoutDashboard } from "lucide-react";
+import { Swords, Trophy, Bell, RotateCcw, LayoutDashboard } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
+import ReminderSettings from "@/components/ReminderSettings";
+import { useDailyReminder } from "@/hooks/useDailyReminder";
 
 const navItems = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, testid: "nav-dashboard" },
@@ -11,6 +14,9 @@ const navItems = [
 
 export default function Shell({ profile, children, onProfileChange }) {
   const navigate = useNavigate();
+  const [reminderOpen, setReminderOpen] = useState(false);
+  // initialize daily reminder scheduling at app shell mount
+  useDailyReminder();
 
   const handleReset = async () => {
     if (!window.confirm("Réinitialiser tout le SYSTEM ? Cette action est irréversible.")) return;
@@ -18,23 +24,6 @@ export default function Shell({ profile, children, onProfileChange }) {
     onProfileChange && onProfileChange();
     navigate("/awakening");
     toast.success("SYSTEM réinitialisé");
-  };
-
-  const handleNotif = async () => {
-    if (!("Notification" in window)) {
-      toast.error("Les notifications ne sont pas supportées");
-      return;
-    }
-    const res = await Notification.requestPermission();
-    if (res === "granted") {
-      toast.success("Notifications activées", { description: "Tu recevras tes quêtes du jour." });
-      new Notification("SYSTEM ACTIVATED", {
-        body: `Hunter ${profile?.name || ""}, les notifications sont activées.`,
-        icon: "/favicon.ico",
-      });
-    } else {
-      toast.error("Permission refusée");
-    }
   };
 
   return (
@@ -77,10 +66,10 @@ export default function Shell({ profile, children, onProfileChange }) {
         <div className="mt-6 p-4 space-y-2 border-t border-cyan-500/10">
           <button
             data-testid="enable-notif-btn"
-            onClick={handleNotif}
+            onClick={() => setReminderOpen(true)}
             className="w-full flex items-center gap-2 text-xs uppercase tracking-widest text-slate-400 hover:text-cyan-300 transition py-2"
           >
-            <Bell size={14} /> Notifications
+            <Bell size={14} /> Rappel quotidien
           </button>
           <button
             data-testid="reset-btn"
@@ -94,6 +83,8 @@ export default function Shell({ profile, children, onProfileChange }) {
 
       {/* Main */}
       <main className="flex-1 p-4 sm:p-8 max-w-6xl">{children}</main>
+
+      <ReminderSettings open={reminderOpen} onClose={() => setReminderOpen(false)} />
     </div>
   );
 }
