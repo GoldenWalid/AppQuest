@@ -3,7 +3,7 @@ import os
 import json
 import re
 from typing import List, Dict
-from emergentintegrations.llm.chat import LlmChat, UserMessage
+import anthropic
 
 
 EMERGENT_LLM_KEY = os.environ.get("EMERGENT_LLM_KEY")
