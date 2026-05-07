@@ -3,7 +3,10 @@
   "version": "0.1.0",
   "private": true,
 "overrides": {
-  "ajv": "^8.0.0"
+  "ajv": "^8.0.0",
+  "webpack": {
+    "ajv": "^8.0.0"
+  }
 },
   "dependencies": {
     "@hookform/resolvers": "^5.0.1",
