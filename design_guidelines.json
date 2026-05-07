@@ -1,0 +1,91 @@
+{
+  "theme": "DARK",
+  "archetype": "7 (Electric & Neon)",
+  "domain": "Gamified Personal Development SaaS (Solo Leveling aesthetic)",
+  "colors": {
+    "background": "#05050A",
+    "foreground": "#E2E8F0",
+    "primary": "#00E5FF",
+    "primary_foreground": "#000000",
+    "secondary": "#1E3A8A",
+    "secondary_foreground": "#E2E8F0",
+    "accent": "#8B5CF6",
+    "accent_foreground": "#FFFFFF",
+    "warning": "#FFB800",
+    "destructive": "#FF2A2A",
+    "destructive_foreground": "#FFFFFF",
+    "border": "rgba(0, 229, 255, 0.2)",
+    "card_background": "rgba(10, 15, 30, 0.6)",
+    "glass_blur": "backdrop-blur-xl"
+  },
+  "typography": {
+    "fonts": {
+      "headings": "Orbitron, sans-serif",
+      "body": "JetBrains Mono, monospace",
+      "accents": "Chakra Petch, sans-serif"
+    },
+    "hierarchy": {
+      "h1": "text-4xl sm:text-5xl lg:text-6xl tracking-tighter uppercase text-transparent bg-clip-text bg-gradient-to-r from-primary to-blue-500 font-bold",
+      "h2": "text-2xl sm:text-3xl lg:text-4xl tracking-tight text-primary font-bold uppercase",
+      "h3": "text-xl sm:text-2xl text-foreground font-semibold",
+      "body": "text-base text-slate-300 leading-relaxed font-mono",
+      "small_labels": "text-xs tracking-[0.2em] uppercase text-primary/70 font-mono"
+    }
+  },
+  "layout_and_spacing": {
+    "grid_strategy": "THE CONTROL ROOM (Dense, technical grid for stats, with asymmetrical focus on main quest)",
+    "spacing_scale": "Use p-4 to p-8 for dense data cards. Use massive padding (p-16+) for empty states or hero 'Awakening' screens.",
+    "borders_and_radii": "Angular, sharp edges or maximum 4px radius (rounded-sm) to maintain the brutal 'System' feel. NO completely rounded/pill buttons."
+  },
+  "surface_strategies": {
+    "cards": "RETRO-FUTURISM / TERMINAL: backdrop-blur-md bg-black/40 border border-primary/30 shadow-[0_0_15px_rgba(0,229,255,0.05)] hover:shadow-[0_0_20px_rgba(0,229,255,0.2)] hover:border-primary/60 transition-all duration-300",
+    "system_modals": "GLASSMORPHISM + GLOW: bg-black/80 backdrop-blur-2xl border-t-2 border-primary shadow-[0_10px_40px_rgba(0,229,255,0.15)]",
+    "progress_bars": "bg-slate-900 border border-primary/20. Fill should be bg-gradient-to-r from-blue-600 to-primary with a drop-shadow-[0_0_8px_rgba(0,229,255,0.8)]"
+  },
+  "motion_and_interactions": {
+    "hover_states": "Hovering interactive elements should increase the cyan glow intensity and slightly lift the element (-translate-y-1).",
+    "modals": "Framer motion scale-up from 0.95 with slight opacity fade-in. Mimic a sudden 'System Alert' popup.",
+    "level_up": "Flash screen border, particle effects, scale typography up and down rapidly (pulse).",
+    "libraries": ["framer-motion", "lucide-react"]
+  },
+  "components_strategy": {
+    "buttons": "Sharp corners. Default: bg-primary/10 text-primary border border-primary/50 hover:bg-primary hover:text-black. Destructive: bg-destructive/10 text-destructive border border-destructive/50 hover:bg-destructive hover:text-white.",
+    "inputs": "bg-black/50 border border-primary/30 focus:border-primary focus:ring-1 focus:ring-primary text-primary font-mono",
+    "badges": "bg-blue-900/40 text-primary border border-primary/40 font-mono uppercase text-xs px-2 py-1"
+  },
+  "media": {
+    "image_urls": [
+      {
+        "slug": "system_background",
+        "url": "https://static.prod-images.emergentagent.com/jobs/e541879c-7f19-486b-bdce-99067a348a40/images/e3a660066e71e8aba4301e2b3a4c68c0d282f3090b552116e32e4426d48b189d.png",
+        "category": "background",
+        "description": "Dark holographic system window background texture, Solo leveling style. Use as an overlaid texture (low opacity, e.g., 5-10%) on the main app background to give depth."
+      },
+      {
+        "slug": "player_avatar",
+        "url": "https://static.prod-images.emergentagent.com/jobs/e541879c-7f19-486b-bdce-99067a348a40/images/30a382d85198b4181258372a8c7fde5ff74db661aa2d30030d3572dd439478cb.png",
+        "category": "avatar",
+        "description": "Mysterious silhouette avatar with glowing blue eyes. Use in the user profile/stats dashboard section."
+      },
+      {
+        "slug": "level_badge",
+        "url": "https://static.prod-images.emergentagent.com/jobs/e541879c-7f19-486b-bdce-99067a348a40/images/2bf8206aef18485fcc7faac2363d568b1a9a7a55645d49b39b646b79b721f887.png",
+        "category": "icon/badge",
+        "description": "Epic glowing level up badge. Use this in the Level progression system or when an 'S-Rank' achievement is unlocked."
+      }
+    ]
+  },
+  "instructions_to_main_agent": [
+    "Install Google Fonts 'Orbitron' and 'JetBrains Mono' via Google Web Fonts in index.html or global css.",
+    "Implement the entire UI in dark mode overriding default Tailwind slate colors with our deep black/blue theme (#05050A).",
+    "App must be a single-page React app focusing on: 1. Onboarding (System Initiation), 2. Dashboard (Player Stats: STR, AGI, INT, etc.), 3. Quest Log (Daily Quests).",
+    "Notifications should mimic 'System Messages' (e.g., 'A new daily quest has arrived').",
+    "Use Shadcn UI components but heavily customize them to strip out the 'Vercel look'. Apply glowing borders, sharp edges (rounded-none or rounded-sm), and monospace fonts for data.",
+    "Use Framer Motion to make panels slide in or pop up like holographic projections.",
+    "Ensure the progress bar for XP looks like a classic RPG health/mana/xp bar: thick, glowing, with numerical text overlaid (e.g., '1450 / 2000 XP')."
+  ],
+  "accessibility": {
+    "testing_attributes": "All interactive elements MUST include data-testid attributes (e.g., data-testid='daily-quest-complete-button').",
+    "contrast": "Ensure neon cyan text maintains adequate contrast against the dark background. Use text-shadow if needed."
+  }
+}
