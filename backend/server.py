@@ -256,9 +256,9 @@ async def initiate_profile_legacy(data: ProfileInit):
         result = await awaken_chat_turn(sid, history)
         # Force one more turn if not ready
         attempts = 0
-        while not result.get("done") and attempts < 4:
+        while not result.get("done") and attempts < 1:
             history.append({"role": "assistant", "content": result.get("message", "")})
-            history.append({"role": "user", "content": "Génère maintenant le JSON architecture complet."})
+            history.append({"role": "user", "content": "RÉPONDS UNIQUEMENT avec le JSON READY contenant l'architecture complète. J'ai donné toutes les infos nécessaires."})
             result = await awaken_chat_turn(sid, history)
             attempts += 1
         if not result.get("done"):

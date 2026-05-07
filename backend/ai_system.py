@@ -132,19 +132,30 @@ async def awaken_chat_turn(session_id: str, history: List[Dict[str, str]]) -> di
     else:
         last = history[-1]
         prior = history[:-1] if last["role"] == "user" else history
+        user_turns = sum(1 for m in history if m["role"] == "user")
+        force_finalize = user_turns >= 12
         convo_text = "\n\n".join(
             f"[{'HUNTER' if m['role'] == 'user' else 'SYSTEM'}]: {m['content']}"
             for m in prior
         )
         if last["role"] == "user":
-            prompt = (
-                f"Conversation jusqu'ici:\n\n{convo_text}\n\n"
-                f"Le HUNTER vient de répondre:\n[HUNTER]: {last['content']}\n\n"
-                "Réponds maintenant. Soit pose la prochaine question pertinente qui creuse "
-                "ou ouvre une nouvelle dimension (selon ton jugement), soit — si tu as "
-                "couvert en profondeur les 8 dimensions et eu au moins 8-10 échanges — "
-                "génère le JSON architecture complet (commençant strictement par {\"READY\":true,...})."
-            )
+            if force_finalize:
+                prompt = (
+                    f"Conversation jusqu'ici:\n\n{convo_text}\n\n"
+                    f"Dernière réponse du HUNTER:\n[HUNTER]: {last['content']}\n\n"
+                    "TU AS EU SUFFISAMMENT D'ÉCHANGES. Tu DOIS maintenant répondre "
+                    "UNIQUEMENT avec le JSON architecture complet (commençant strictement "
+                    "par {\"READY\":true,...}). AUCUN autre texte, AUCUN markdown."
+                )
+            else:
+                prompt = (
+                    f"Conversation jusqu'ici:\n\n{convo_text}\n\n"
+                    f"Le HUNTER vient de répondre:\n[HUNTER]: {last['content']}\n\n"
+                    "Réponds maintenant. Soit pose la prochaine question pertinente qui creuse "
+                    "ou ouvre une nouvelle dimension (selon ton jugement), soit — si tu as "
+                    "couvert en profondeur les 8 dimensions et eu au moins 8-10 échanges — "
+                    "génère le JSON architecture complet (commençant strictement par {\"READY\":true,...})."
+                )
         else:
             prompt = "Continue la conversation."
 

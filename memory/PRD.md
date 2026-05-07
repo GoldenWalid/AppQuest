@@ -44,3 +44,16 @@ Application de quêtes style Solo Leveling. L'utilisateur rentre son profil, son
 - P2: export/share progress
 - P2: dark/light/custom themes per rank
 - P2: multi-user + auth (if needed later)
+
+## Update 2026-02-07 — Conversational Holistic Awakening
+- Replaced static 4-step form onboarding with adaptive AI conversation (chat UI).
+- New endpoint `POST /api/awaken/chat` (Claude Sonnet 4.5) covers 8 dimensions: identité, environnement, corps & habitudes, ombres & traumas, connexion au réel, valeurs profondes, vision/devenir, objectifs du mois.
+- AI now generates UNIQUE class_title and UNIQUE skills (poetic, sur-mesure — banned generic terms like "Discipline"/"Focus"/"Warrior"/"Mage").
+- Tone: solennel, dramatique, bienveillant — outil personnel de transformation/renaissance holistique (pour les clients d'un coach).
+- Safety guard: AI is forced to finalize after 12 user turns to avoid infinite questioning.
+- Legacy `/api/profile/initiate` kept for back-compat (single retry now to limit token burn).
+- Chat UI: bubble messages SYSTEM/HUNTER, thinking indicator, auto-scroll, Enter-to-send.
+
+## Verified Tests
+- iter 3: backend pytest 7/8 (1 transient LLM budget cap, no code defect), frontend 100%.
+- Real conversation produces e.g. class_title='Artisan du Réel Enraciné' with unique poetic skills.
