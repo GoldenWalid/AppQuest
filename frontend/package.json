@@ -4,9 +4,11 @@
   "private": true,
 "overrides": {
   "ajv": "^8.0.0",
-  "webpack": {
-    "ajv": "^8.0.0"
-  }
+  "ajv-keywords": "^5.0.0",
+  "schema-utils": "^4.0.0"
+},
+"engines": {
+  "node": "18.x"
 },
   "dependencies": {
     "@hookform/resolvers": "^5.0.1",
