@@ -3,17 +3,16 @@ import axios from "axios";
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 export const API = `${BACKEND_URL}/api`;
 
-// Send cookies (session_token httpOnly) on every request
 axios.defaults.withCredentials = true;
 
 export const api = {
-  // auth
-  exchangeSession: (session_id) =>
-    axios.post(`${API}/auth/session`, { session_id }).then((r) => r.data),
+  register: (email, password, name) =>
+    axios.post(`${API}/auth/register`, { email, password, name }).then((r) => r.data),
+  login: (email, password) =>
+    axios.post(`${API}/auth/login`, { email, password }).then((r) => r.data),
   me: () => axios.get(`${API}/auth/me`).then((r) => r.data),
   logout: () => axios.post(`${API}/auth/logout`).then((r) => r.data),
 
-  // app
   getProfile: () => axios.get(`${API}/profile`).then((r) => r.data),
   awakenChat: (session_id, messages) =>
     axios.post(`${API}/awaken/chat`, { session_id, messages }).then((r) => r.data),
