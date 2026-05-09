@@ -19,19 +19,11 @@ export function AuthProvider({ children }) {
   }, []);
 
   useEffect(() => {
-    // CRITICAL: If returning from OAuth callback, skip the /me check.
-    // AuthCallback will exchange the session_id and establish the session first.
-    if (window.location.hash?.includes("session_id=")) {
-      setLoading(false);
-      return;
-    }
     checkAuth();
   }, [checkAuth]);
 
   const logout = async () => {
-    try {
-      await api.logout();
-    } catch (_) { /* ignore */ }
+    try { await api.logout(); } catch (_) {}
     setUser(null);
   };
 
