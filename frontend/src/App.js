@@ -11,7 +11,6 @@ import { Toaster } from "sonner";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import Login from "@/pages/Login";
-import AuthCallback from "@/pages/AuthCallback";
 import Awakening from "@/pages/Awakening";
 import Dashboard from "@/pages/Dashboard";
 import Quests from "@/pages/Quests";
@@ -82,11 +81,6 @@ function DashboardWrapper() {
 }
 
 function AppRouter() {
-  const location = useLocation();
-  // Synchronous detection during render — must run BEFORE any other route logic.
-  if (location.hash?.includes("session_id=")) {
-    return <AuthCallback />;
-  }
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
@@ -143,7 +137,6 @@ function App() {
   useEffect(() => {
     registerServiceWorker();
   }, []);
-  // Make React lint happy if unused
   void React;
   return (
     <div className="App">
