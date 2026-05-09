@@ -1,16 +1,14 @@
-"""Emergent-managed Google OAuth — session validation, login, logout."""
+"""Auth system — email + password with JWT sessions."""
 import uuid
 import logging
+import hashlib
+import secrets
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 
-import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel
 from motor.motor_asyncio import AsyncIOMotorDatabase
-
-# REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS, THIS BREAKS THE AUTH
-EMERGENT_OAUTH_SESSION_URL = "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data"
 
 logger = logging.getLogger(__name__)
 
@@ -23,12 +21,23 @@ class User(BaseModel):
     created_at: Optional[str] = None
 
 
-class SessionExchangeReq(BaseModel):
-    session_id: str
+class RegisterReq(BaseModel):
+    email: str
+    password: str
+    name: str
+
+
+class LoginReq(BaseModel):
+    email: str
+    password: str
+
+
+def _hash_password(password: str) -> str:
+    salt = "appquest_salt_2026"
+    return hashlib.sha256(f"{salt}{password}".encode()).hexdigest()
 
 
 def _get_token(request: Request) -> Optional[str]:
-    """Cookie first, then Authorization: Bearer ... fallback."""
     token = request.cookies.get("session_token")
     if token:
         return token
@@ -39,8 +48,6 @@ def _get_token(request: Request) -> Optional[str]:
 
 
 def make_require_user(db: AsyncIOMotorDatabase):
-    """Build a FastAPI dependency that returns the current authenticated User."""
-
     async def _dep(request: Request) -> User:
         token = _get_token(request)
         if not token:
@@ -58,10 +65,10 @@ def make_require_user(db: AsyncIOMotorDatabase):
         user_doc = await db.users.find_one({"user_id": session["user_id"]}, {"_id": 0})
         if not user_doc:
             raise HTTPException(status_code=401, detail="User not found")
-        # mongosh-seeded users may have BSON Date for created_at; coerce to str
         ca = user_doc.get("created_at")
         if isinstance(ca, datetime):
             user_doc["created_at"] = ca.isoformat()
+        user_doc.pop("password_hash", None)
         return User(**user_doc)
 
     return _dep
@@ -71,60 +78,58 @@ def make_auth_router(db: AsyncIOMotorDatabase) -> APIRouter:
     router = APIRouter(prefix="/auth")
     require_user = make_require_user(db)
 
-    async def _exchange_session_id(session_id: str) -> dict:
-        async with httpx.AsyncClient(timeout=15.0) as cli:
-            r = await cli.get(
-                EMERGENT_OAUTH_SESSION_URL,
-                headers={"X-Session-ID": session_id},
-            )
-        if r.status_code != 200:
-            raise HTTPException(status_code=401, detail="Invalid session_id")
-        return r.json()
-
-    async def _upsert_user(payload: dict) -> str:
-        existing = await db.users.find_one({"email": payload["email"]}, {"_id": 0})
-        if existing:
-            await db.users.update_one(
-                {"user_id": existing["user_id"]},
-                {"$set": {"name": payload.get("name", existing.get("name")),
-                          "picture": payload.get("picture", existing.get("picture"))}},
-            )
-            return existing["user_id"]
-        user_id = f"user_{uuid.uuid4().hex[:12]}"
-        await db.users.insert_one({
-            "user_id": user_id,
-            "email": payload["email"],
-            "name": payload.get("name", ""),
-            "picture": payload.get("picture", ""),
-            "created_at": datetime.now(timezone.utc).isoformat(),
-        })
-        return user_id
-
-    async def _store_session(user_id: str, session_token: str) -> None:
-        expires_at = datetime.now(timezone.utc) + timedelta(days=7)
+    async def _store_session(user_id: str) -> str:
+        session_token = secrets.token_urlsafe(32)
+        expires_at = datetime.now(timezone.utc) + timedelta(days=30)
         await db.user_sessions.insert_one({
             "user_id": user_id,
             "session_token": session_token,
             "expires_at": expires_at.isoformat(),
             "created_at": datetime.now(timezone.utc).isoformat(),
         })
+        return session_token
 
-    @router.post("/session")
-    async def session_exchange(body: SessionExchangeReq, response: Response):
-        payload = await _exchange_session_id(body.session_id)
-        user_id = await _upsert_user(payload)
-        session_token = payload["session_token"]
-        await _store_session(user_id, session_token)
+    def _set_session_cookie(response: Response, token: str):
         response.set_cookie(
             key="session_token",
-            value=session_token,
-            max_age=7 * 24 * 60 * 60,
+            value=token,
+            max_age=30 * 24 * 60 * 60,
             path="/",
             httponly=True,
             secure=True,
             samesite="none",
         )
-        user_doc = await db.users.find_one({"user_id": user_id}, {"_id": 0})
+
+    @router.post("/register")
+    async def register(body: RegisterReq, response: Response):
+        existing = await db.users.find_one({"email": body.email.lower().strip()})
+        if existing:
+            raise HTTPException(status_code=400, detail="Email déjà utilisé")
+        user_id = f"user_{uuid.uuid4().hex[:12]}"
+        await db.users.insert_one({
+            "user_id": user_id,
+            "email": body.email.lower().strip(),
+            "name": body.name.strip(),
+            "picture": "",
+            "password_hash": _hash_password(body.password),
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+        session_token = await _store_session(user_id)
+        _set_session_cookie(response, session_token)
+        user_doc = await db.users.find_one({"user_id": user_id}, {"_id": 0, "password_hash": 0})
+        return {"user": user_doc}
+
+    @router.post("/login")
+    async def login(body: LoginReq, response: Response):
+        user_doc = await db.users.find_one({"email": body.email.lower().strip()})
+        if not user_doc:
+            raise HTTPException(status_code=401, detail="Email ou mot de passe incorrect")
+        if user_doc.get("password_hash") != _hash_password(body.password):
+            raise HTTPException(status_code=401, detail="Email ou mot de passe incorrect")
+        session_token = await _store_session(user_doc["user_id"])
+        _set_session_cookie(response, session_token)
+        user_doc.pop("_id", None)
+        user_doc.pop("password_hash", None)
         return {"user": user_doc}
 
     @router.get("/me", response_model=User)
