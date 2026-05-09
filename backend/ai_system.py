@@ -7,7 +7,7 @@ import google.generativeai as genai
 
 GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY")
 genai.configure(api_key=GOOGLE_API_KEY)
-MODEL = "gemini-2.0-flash"
+MODEL = "gemini-2.5-flash"
 
 
 # ============ HOLISTIC AWAKENING CONVERSATION ============
