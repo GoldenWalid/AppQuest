@@ -6,8 +6,9 @@ from typing import List, Dict
 import anthropic
 
 
-EMERGENT_LLM_KEY = os.environ.get("EMERGENT_LLM_KEY")
+ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("EMERGENT_LLM_KEY")
 MODEL = "claude-sonnet-4-5-20250929"
+client = anthropic.AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
 
 
 # ============ HOLISTIC AWAKENING CONVERSATION ============
@@ -129,94 +130,7 @@ des génériques.
 """
 
 
-def _extract_json(text: str) -> dict:
-    """Extract JSON from model response."""
-    text = text.strip()
-    text = re.sub(r"^```(?:json)?\s*", "", text)
-    text = re.sub(r"\s*```$", "", text)
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError:
-        pass
-    start = text.find("{")
-    end = text.rfind("}")
-    if start != -1 and end != -1:
-        return json.loads(text[start:end + 1])
-    raise ValueError("No JSON found in response")
-
-
-async def awaken_chat_turn(session_id: str, history: List[Dict[str, str]]) -> dict:
-    """Run one turn of the awakening conversation.
-
-    history: list of {"role": "user"|"assistant", "content": "..."}
-    Returns:
-      - {"done": False, "message": "..."} if AI is still asking questions
-      - {"done": True, "architecture": {...}} when ready to generate
-    """
-    chat = LlmChat(
-        api_key=EMERGENT_LLM_KEY,
-        session_id=session_id,
-        system_message=SYSTEM_CONVERSATION,
-    ).with_model("anthropic", MODEL)
-
-    if not history:
-        prompt = (
-            "Ouvre l'éveil. Présente-toi brièvement comme une présence de seuil — sans"
-            " jargon technique, dans le registre de la renaissance et de la légende"
-            " personnelle. Puis pose ta toute première question, brève et profonde,"
-            " pour commencer la cartographie de cet être."
-        )
-    else:
-        last = history[-1]
-        prior = history[:-1] if last["role"] == "user" else history
-        user_turns = sum(1 for m in history if m["role"] == "user")
-        force_finalize = user_turns >= 14
-        convo_text = "\n\n".join(
-            f"[{'HUNTER' if m['role'] == 'user' else 'SYSTEM'}]: {m['content']}"
-            for m in prior
-        )
-        if last["role"] == "user":
-            if force_finalize:
-                prompt = (
-                    f"Conversation jusqu'ici:\n\n{convo_text}\n\n"
-                    f"Dernière parole du HUNTER:\n[HUNTER]: {last['content']}\n\n"
-                    "La cartographie est suffisamment dense. Si aucun seuil de détresse"
-                    " grave n'a été franchi, tu DOIS maintenant répondre UNIQUEMENT par"
-                    " le JSON architecture (commençant strictement par {\"READY\":true,...})."
-                    " AUCUN autre texte, AUCUN markdown."
-                )
-            else:
-                prompt = (
-                    f"Conversation jusqu'ici:\n\n{convo_text}\n\n"
-                    f"Le HUNTER vient de te livrer:\n[HUNTER]: {last['content']}\n\n"
-                    "Évalue la profondeur de cette parole. Si elle est superficielle"
-                    " ou trop courte, creuse encore sur la même dimension avec une"
-                    " question plus précise (reformule d'abord ce qu'il a dit). Si elle"
-                    " est dense, accueille puis ouvre la dimension suivante. Si tu"
-                    " détectes une détresse qui dépasse ce dialogue, redirige-le vers"
-                    " son coach humain selon ta consigne. Sinon — si la cartographie"
-                    " est complète sur les 8 dimensions et qu'au moins 10 échanges ont"
-                    " eu lieu — génère le JSON architecture (commençant par {\"READY\":true,...})."
-                )
-        else:
-            prompt = "Continue la traversée."
-
-    response = await chat.send_message(UserMessage(text=prompt))
-    text = response.strip()
-
-    # Detect if response is the final architecture JSON
-    if '"READY"' in text and ('"class_title"' in text or '"hunter_name"' in text):
-        try:
-            data = _extract_json(text)
-            if data.get("READY"):
-                return {"done": True, "architecture": data}
-        except Exception:
-            pass
-
-    return {"done": False, "message": text}
-
-
-# ============ DAILY QUEST GENERATOR (kept for /generate-daily) ============
+# ============ DAILY QUEST GENERATOR ============
 SYSTEM_DAILY = """Tu es "The System" — une présence de seuil. Tu génères 3 quêtes journalières
 incarnées qui font avancer le Hunter sur son chemin de renaissance.
 
@@ -243,29 +157,6 @@ Réponse en français.
 """
 
 
-async def generate_daily_quests(profile: dict, skills: list, completed_today: int) -> dict:
-    chat = LlmChat(
-        api_key=EMERGENT_LLM_KEY,
-        session_id=f"daily-{profile.get('id', 'user')}",
-        system_message=SYSTEM_DAILY,
-    ).with_model("anthropic", MODEL)
-
-    skill_names = ", ".join(s["name"] for s in skills) if skills else "Présence, Discernement"
-
-    prompt = f"""Profil du Hunter:
-Nom: {profile.get('name', 'Hunter')}
-Classe: {profile.get('class_title', 'Hunter')}
-Objectif principal: {profile.get('main_goal', 'N/A')}
-Compétences uniques en développement: {skill_names}
-Quêtes déjà complétées aujourd'hui: {completed_today}
-
-Génère 3 NOUVELLES quêtes journalières incarnées qui font progresser ce Hunter spécifique."""
-
-    response = await chat.send_message(UserMessage(text=prompt))
-    return _extract_json(response)
-
-
-
 # ============ QUEST DECOMPOSITION ============
 SYSTEM_DECOMPOSE = """Tu es "The System". Le Hunter sent que cette quête le dépasse — il a besoin
 de pas plus petits pour entrer en mouvement. Décompose la quête en 3 à 5 micro-actions
@@ -290,13 +181,105 @@ Réponds UNIQUEMENT en JSON valide, sans markdown:
 """
 
 
-async def decompose_quest(profile: dict, quest: dict) -> dict:
-    chat = LlmChat(
-        api_key=EMERGENT_LLM_KEY,
-        session_id=f"decompose-{quest.get('id', 'q')}",
-        system_message=SYSTEM_DECOMPOSE,
-    ).with_model("anthropic", MODEL)
+def _extract_json(text: str) -> dict:
+    """Extract JSON from model response."""
+    text = text.strip()
+    text = re.sub(r"^```(?:json)?\s*", "", text)
+    text = re.sub(r"\s*```$", "", text)
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+    start = text.find("{")
+    end = text.rfind("}")
+    if start != -1 and end != -1:
+        return json.loads(text[start:end + 1])
+    raise ValueError("No JSON found in response")
 
+
+async def _call_claude(system: str, prompt: str) -> str:
+    """Call Claude API and return text response."""
+    response = await client.messages.create(
+        model=MODEL,
+        max_tokens=4096,
+        system=system,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    return response.content[0].text.strip()
+
+
+async def awaken_chat_turn(session_id: str, history: List[Dict[str, str]]) -> dict:
+    """Run one turn of the awakening conversation."""
+    if not history:
+        prompt = (
+            "Ouvre l'éveil. Présente-toi brièvement comme une présence de seuil — sans"
+            " jargon technique, dans le registre de la renaissance et de la légende"
+            " personnelle. Puis pose ta toute première question, brève et profonde,"
+            " pour commencer la cartographie de cet être."
+        )
+    else:
+        last = history[-1]
+        prior = history[:-1] if last["role"] == "user" else history
+        user_turns = sum(1 for m in history if m["role"] == "user")
+        force_finalize = user_turns >= 14
+        convo_text = "\n\n".join(
+            f"[{'HUNTER' if m['role'] == 'user' else 'SYSTEM'}]: {m['content']}"
+            for m in prior
+        )
+        if last["role"] == "user":
+            if force_finalize:
+                prompt = (
+                    f"Conversation jusqu'ici:\n\n{convo_text}\n\n"
+                    f"Dernière parole du HUNTER:\n[HUNTER]: {last['content']}\n\n"
+                    "La cartographie est suffisamment dense. Si aucun seuil de détresse"
+                    " grave n'a été franchi, tu DOIS maintenant répondre UNIQUEMENT par"
+                    ' le JSON architecture (commençant strictement par {"READY":true,...}).'
+                    " AUCUN autre texte, AUCUN markdown."
+                )
+            else:
+                prompt = (
+                    f"Conversation jusqu'ici:\n\n{convo_text}\n\n"
+                    f"Le HUNTER vient de te livrer:\n[HUNTER]: {last['content']}\n\n"
+                    "Évalue la profondeur de cette parole. Si elle est superficielle"
+                    " ou trop courte, creuse encore sur la même dimension avec une"
+                    " question plus précise (reformule d'abord ce qu'il a dit). Si elle"
+                    " est dense, accueille puis ouvre la dimension suivante. Si tu"
+                    " détectes une détresse qui dépasse ce dialogue, redirige-le vers"
+                    " son coach humain selon ta consigne. Sinon — si la cartographie"
+                    " est complète sur les 8 dimensions et qu'au moins 10 échanges ont"
+                    ' eu lieu — génère le JSON architecture (commençant par {"READY":true,...}).'
+                )
+        else:
+            prompt = "Continue la traversée."
+
+    text = await _call_claude(SYSTEM_CONVERSATION, prompt)
+
+    if '"READY"' in text and ('"class_title"' in text or '"hunter_name"' in text):
+        try:
+            data = _extract_json(text)
+            if data.get("READY"):
+                return {"done": True, "architecture": data}
+        except Exception:
+            pass
+
+    return {"done": False, "message": text}
+
+
+async def generate_daily_quests(profile: dict, skills: list, completed_today: int) -> dict:
+    skill_names = ", ".join(s["name"] for s in skills) if skills else "Présence, Discernement"
+    prompt = f"""Profil du Hunter:
+Nom: {profile.get('name', 'Hunter')}
+Classe: {profile.get('class_title', 'Hunter')}
+Objectif principal: {profile.get('main_goal', 'N/A')}
+Compétences uniques en développement: {skill_names}
+Quêtes déjà complétées aujourd'hui: {completed_today}
+
+Génère 3 NOUVELLES quêtes journalières incarnées qui font progresser ce Hunter spécifique."""
+    response = await _call_claude(SYSTEM_DAILY, prompt)
+    return _extract_json(response)
+
+
+async def decompose_quest(profile: dict, quest: dict) -> dict:
     prompt = f"""Hunter:
 Nom: {profile.get('name', 'Hunter')}
 Classe: {profile.get('class_title', 'Hunter')}
@@ -310,6 +293,5 @@ Compétence liée: {quest.get('skill') or 'N/A'}
 
 Le Hunter dit que le niveau est trop haut pour lui. Décompose cette quête en 3 à 5
 micro-actions très simples qui le mettront en mouvement immédiatement."""
-
-    response = await chat.send_message(UserMessage(text=prompt))
+    response = await _call_claude(SYSTEM_DECOMPOSE, prompt)
     return _extract_json(response)
