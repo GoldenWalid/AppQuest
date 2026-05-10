@@ -1,7 +1,4 @@
-import os
-
-# ===== Awakening.jsx — avec barre de progression + bouton à 70% =====
-awakening_jsx = r"""import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Send, Loader2, Sparkles, RotateCcw, Zap } from "lucide-react";
@@ -269,6 +266,4 @@ export default function Awakening({ onInitiated }) {
 }
 """
 
-with open(os.path.expanduser('~/renaissance/src/pages/Awakening.jsx'), 'w') as f:
-    f.write(awakening_jsx)
-print("Awakening.jsx ✓", len(awakening_jsx), "chars")
+
