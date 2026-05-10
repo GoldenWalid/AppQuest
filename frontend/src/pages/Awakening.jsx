@@ -1,19 +1,23 @@
-import { useState, useEffect, useRef } from "react";
+import os
+
+# ===== Awakening.jsx — avec barre de progression + bouton à 70% =====
+awakening_jsx = r"""import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, Loader2, Sparkles, RotateCcw } from "lucide-react";
+import { Send, Loader2, Sparkles, RotateCcw, Zap } from "lucide-react";
 import { toast } from "sonner";
 import axios from "axios";
 import { API } from "@/lib/api";
 
-// generate a stable session id per awakening
-const newSessionId = () =>
-  `awaken-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+const newSessionId = () => `awaken-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+// 8 dimensions x ~12% chacune, cappé à 95% avant finalisation
+const calcProgress = (userTurns) => Math.min(95, userTurns * 12);
 
 export default function Awakening({ onInitiated }) {
   const [started, setStarted] = useState(false);
   const [sessionId, setSessionId] = useState(newSessionId);
-  const [messages, setMessages] = useState([]); // [{role:'assistant'|'user', content}]
+  const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [thinking, setThinking] = useState(false);
   const [finalizing, setFinalizing] = useState(false);
@@ -21,135 +25,172 @@ export default function Awakening({ onInitiated }) {
   const scrollRef = useRef(null);
   const inputRef = useRef(null);
 
+  const userTurns = messages.filter((m) => m.role === "user").length;
+  const progress = calcProgress(userTurns);
+  const canEarlyGenerate = progress >= 70 && !thinking && !finalizing;
+
+  useEffect(() => {
+    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+  }, [messages, thinking]);
+
   const handleRestart = async () => {
     if (thinking || finalizing) return;
-    if (messages.length > 0 && !window.confirm("Recommencer la conversation depuis le début ?")) return;
-    setMessages([]);
-    setInput("");
-    setSessionId(newSessionId());
-    setStarted(false);
+    if (messages.length > 0 && !window.confirm("Recommencer depuis le début ?")) return;
+    setMessages([]); setInput(""); setSessionId(newSessionId()); setStarted(false);
     toast.success("Conversation réinitialisée");
   };
 
-  useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
-  }, [messages, thinking]);
-
-  const sendTurn = async (history) => {
+  const sendTurn = async (history, forceFinalize = false) => {
     setThinking(true);
     try {
       const res = await axios.post(`${API}/awaken/chat`, {
         session_id: sessionId,
         messages: history,
+        force_finalize: forceFinalize,
       });
       if (res.data.done) {
         setFinalizing(true);
-        toast.success("SYSTEM activé", { description: res.data.system_message });
+        toast.success("[ RENAISSANCE ] Profil activé", { description: res.data.system_message });
         if (onInitiated) await onInitiated();
         navigate("/");
       } else {
-        setMessages([
-          ...history,
-          { role: "assistant", content: res.data.message },
-        ]);
+        setMessages([...history, { role: "assistant", content: res.data.message }]);
       }
     } catch (e) {
-      toast.error("Erreur SYSTEM", {
-        description: e?.response?.data?.detail || e.message,
-      });
+      toast.error("Erreur RENAISSANCE", { description: e?.response?.data?.detail || e.message });
     } finally {
       setThinking(false);
       setTimeout(() => inputRef.current?.focus(), 50);
     }
   };
 
-  const handleStart = async () => {
-    setStarted(true);
-    await sendTurn([]);
-  };
+  const handleStart = async () => { setStarted(true); await sendTurn([]); };
 
   const handleSend = async () => {
     const text = input.trim();
     if (!text || thinking) return;
     const next = [...messages, { role: "user", content: text }];
-    setMessages(next);
-    setInput("");
+    setMessages(next); setInput("");
     await sendTurn(next);
   };
 
-  // INTRO SCREEN
+  const handleEarlyGenerate = async () => {
+    if (!canEarlyGenerate) return;
+    toast.info("[ RENAISSANCE ] Génération en cours...", { description: "Création de ton profil avec les données actuelles." });
+    await sendTurn(messages, true);
+  };
+
+  // ===== INTRO =====
   if (!started) {
     return (
       <div className="min-h-screen flex items-center justify-center p-4">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="max-w-2xl w-full corner-frame sys-card scanlines p-12 relative text-center"
+          className="max-w-2xl w-full corner-frame sys-card scanlines p-10 sm:p-14 relative text-center"
           data-testid="awakening-intro"
         >
-          <div className="font-accent text-xs tracking-[0.5em] text-cyan-300/70 mb-4">
-            [ SEUIL · RENAISSANCE · LÉGENDE ]
+          <div className="font-accent text-xs tracking-[0.5em] mb-4" style={{ color: "rgba(0,255,135,0.6)" }}>
+            [ RENAISSANCE · CARTOGRAPHIE · QUÊTES ]
           </div>
-          <h1 className="font-display text-4xl sm:text-5xl lg:text-6xl font-black uppercase mb-6 text-transparent bg-clip-text bg-gradient-to-r from-cyan-200 via-cyan-400 to-blue-600 tracking-tighter">
-            Tu te tiens<br />sur un seuil
+          <h1 className="font-display text-4xl sm:text-5xl lg:text-6xl font-black uppercase mb-6 tracking-tighter"
+            style={{ color: "var(--green)", textShadow: "0 0 30px rgba(0,255,135,0.4)" }}>
+            Commence<br />ta renaissance
           </h1>
-          <p className="text-slate-300 mb-3 max-w-lg mx-auto leading-relaxed">
-            Avant tout chemin, une cartographie. <span className="text-cyan-300 glow-text">The System</span>
-            {" "}va dialoguer avec toi en profondeur — qui tu es, ce que tu portes,
-            ce que ton vivant cherche à devenir. C'est l'entrée dans ta légende personnelle.
+          <p className="mb-3 max-w-lg mx-auto leading-relaxed" style={{ color: "var(--text)" }}>
+            Une conversation de <span style={{ color: "var(--green)" }}>10 à 12 échanges</span> pour
+            cartographier qui tu es, ce qui te bloque, et où tu vas. Ton profil et tes quêtes
+            personnalisées seront générés à la fin.
           </p>
-          <p className="text-slate-500 text-sm mb-10 font-mono">
-            identité · ombres · corps · vérité · vision · réel
+          <p className="text-sm mb-10 font-mono" style={{ color: "var(--text-muted)" }}>
+            corps · croyances · valeurs · direction · vision
           </p>
           <button
             data-testid="start-awakening-btn"
             onClick={handleStart}
             className="sys-btn inline-flex items-center gap-2"
           >
-            <Sparkles size={14} /> Franchir le seuil
+            <Sparkles size={14} /> Commencer
           </button>
-          <p className="text-slate-600 text-xs mt-6 font-mono">
-            La traversée prend ~10 à 15 échanges. Réponds en vérité, sans te censurer.
+          <p className="text-xs mt-6 font-mono" style={{ color: "rgba(107,138,148,0.6)" }}>
+            Réponds honnêtement. Plus tu es précis, meilleures sont tes quêtes.
           </p>
         </motion.div>
       </div>
     );
   }
 
-  // CHAT SCREEN
+  // ===== CHAT =====
   return (
     <div className="min-h-screen flex items-center justify-center p-4">
-      <div className="max-w-3xl w-full sys-card corner-frame relative flex flex-col" style={{ height: "min(85vh, 800px)" }}>
+      <div className="max-w-3xl w-full sys-card corner-frame relative flex flex-col" style={{ height: "min(88vh, 820px)" }}>
+
         {/* Header */}
-        <div className="border-b border-cyan-500/20 px-6 py-4 flex items-center justify-between">
+        <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: "1px solid rgba(0,255,135,0.15)" }}>
           <div>
-            <div className="font-accent text-[10px] tracking-[0.4em] text-cyan-300/70 uppercase">
-              [ TRAVERSÉE EN COURS ]
+            <div className="font-accent text-[10px] tracking-[0.4em] uppercase mb-0.5" style={{ color: "rgba(0,255,135,0.6)" }}>
+              [ SYSTÈME // ÉVEIL EN COURS ]
             </div>
-            <div className="font-display text-lg font-bold text-cyan-300 glow-text">
-              Dialogue avec The System
+            <div className="font-display text-base sm:text-lg font-bold glow-text-green" style={{ color: "var(--green)" }}>
+              Dialogue avec RENAISSANCE
             </div>
           </div>
-          <div className="font-mono text-xs text-slate-500 flex items-center gap-3">
-            <span>{messages.filter(m => m.role === "user").length} réponse{messages.filter(m => m.role === "user").length !== 1 ? "s" : ""}</span>
+          <div className="font-mono text-xs flex items-center gap-3" style={{ color: "var(--text-muted)" }}>
+            <span>{userTurns} rép.</span>
             <button
               data-testid="awakening-restart-btn"
               onClick={handleRestart}
               disabled={thinking || finalizing}
-              className="inline-flex items-center gap-1 text-slate-500 hover:text-cyan-300 transition uppercase tracking-widest text-[10px] disabled:opacity-40"
-              title="Recommencer la conversation"
+              className="inline-flex items-center gap-1 transition hover:text-green-400 disabled:opacity-40 uppercase tracking-widest text-[10px]"
+              style={{ color: "var(--text-muted)" }}
             >
-              <RotateCcw size={12} /> Recommencer
+              <RotateCcw size={11} /> Reset
             </button>
           </div>
+        </div>
+
+        {/* Barre de progression cartographie */}
+        <div className="px-5 pt-3 pb-2">
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="font-accent text-[10px] tracking-[0.3em] uppercase" style={{ color: "rgba(0,255,135,0.5)" }}>
+              Cartographie
+            </span>
+            <span className="font-mono text-[10px]" style={{ color: progress >= 70 ? "var(--gold)" : "rgba(0,255,135,0.5)" }}>
+              {progress}%
+            </span>
+          </div>
+          <div className="mapping-bar-track">
+            <div
+              className={`mapping-bar-fill ${progress >= 70 ? "at-70" : ""}`}
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+          {/* Bouton générer à 70% */}
+          <AnimatePresence>
+            {canEarlyGenerate && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+                className="mt-2"
+              >
+                <button
+                  onClick={handleEarlyGenerate}
+                  className="sys-btn-gold sys-btn inline-flex items-center gap-2 w-full justify-center text-[11px]"
+                  style={{ padding: "0.45rem 1rem" }}
+                >
+                  <Zap size={12} />
+                  Assez de données — Générer mes quêtes maintenant
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
 
         {/* Messages */}
         <div
           ref={scrollRef}
-          className="flex-1 overflow-y-auto px-4 sm:px-6 py-6 space-y-4"
+          className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 space-y-4"
           data-testid="awakening-chat-messages"
         >
           <AnimatePresence initial={false}>
@@ -163,41 +204,32 @@ export default function Awakening({ onInitiated }) {
                 data-testid={`msg-${m.role}-${i}`}
               >
                 <div
-                  className={`max-w-[85%] px-4 py-3 ${
-                    m.role === "user"
-                      ? "bg-cyan-500/15 border border-cyan-500/40 text-cyan-50"
-                      : "bg-black/60 border border-cyan-500/20 text-slate-200"
-                  }`}
+                  className="max-w-[85%] px-4 py-3"
+                  style={m.role === "user"
+                    ? { background: "rgba(0,255,135,0.08)", border: "1px solid rgba(0,255,135,0.35)", color: "var(--text)" }
+                    : { background: "rgba(8,12,14,0.8)", border: "1px solid rgba(0,255,135,0.15)", color: "var(--text)" }
+                  }
                 >
                   {m.role === "assistant" && (
-                    <div className="font-accent text-[10px] tracking-[0.3em] text-cyan-300/70 uppercase mb-1.5">
-                      [ SYSTEM ]
+                    <div className="font-accent text-[10px] tracking-[0.3em] uppercase mb-1.5" style={{ color: "rgba(0,255,135,0.6)" }}>
+                      [ RENAISSANCE ]
                     </div>
                   )}
-                  <div className="text-sm leading-relaxed whitespace-pre-wrap">
-                    {m.content}
-                  </div>
+                  <div className="text-sm leading-relaxed whitespace-pre-wrap">{m.content}</div>
                 </div>
               </motion.div>
             ))}
           </AnimatePresence>
 
           {thinking && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="flex justify-start"
-              data-testid="thinking-indicator"
-            >
-              <div className="bg-black/60 border border-cyan-500/20 px-4 py-3">
-                <div className="font-accent text-[10px] tracking-[0.3em] text-cyan-300/70 uppercase mb-1.5">
-                  [ SYSTEM ]
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex justify-start" data-testid="thinking-indicator">
+              <div className="px-4 py-3" style={{ background: "rgba(8,12,14,0.8)", border: "1px solid rgba(0,255,135,0.15)" }}>
+                <div className="font-accent text-[10px] tracking-[0.3em] uppercase mb-1.5" style={{ color: "rgba(0,255,135,0.6)" }}>
+                  [ RENAISSANCE ]
                 </div>
-                <div className="flex items-center gap-2 text-cyan-300 text-sm">
+                <div className="flex items-center gap-2 text-sm" style={{ color: "var(--green)" }}>
                   <Loader2 size={14} className="animate-spin" />
-                  <span className="font-mono">
-                    {finalizing ? "tissage de ton architecture..." : "écoute en profondeur..."}
-                  </span>
+                  <span className="font-mono">{finalizing ? "génération du profil..." : "analyse en cours..."}</span>
                 </div>
               </div>
             </motion.div>
@@ -205,24 +237,18 @@ export default function Awakening({ onInitiated }) {
         </div>
 
         {/* Input */}
-        <div className="border-t border-cyan-500/20 p-4">
+        <div className="p-4" style={{ borderTop: "1px solid rgba(0,255,135,0.15)" }}>
           <div className="flex gap-2 items-end">
             <textarea
               ref={inputRef}
               data-testid="awakening-chat-input"
-              autoFocus
-              rows={2}
+              autoFocus rows={2}
               className="sys-input resize-none flex-1"
-              placeholder={thinking ? "Le seuil écoute..." : "Réponds en vérité..."}
+              placeholder={thinking ? "Renaissance analyse..." : "Réponds honnêtement..."}
               value={input}
               disabled={thinking || finalizing}
               onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  handleSend();
-                }
-              }}
+              onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
             />
             <button
               data-testid="awakening-chat-send"
@@ -233,7 +259,7 @@ export default function Awakening({ onInitiated }) {
               <Send size={14} />
             </button>
           </div>
-          <div className="text-[10px] text-slate-500 font-mono mt-2 tracking-widest uppercase">
+          <div className="text-[10px] font-mono mt-2 tracking-widest uppercase" style={{ color: "rgba(107,138,148,0.5)" }}>
             Entrée pour envoyer · Shift+Entrée pour saut de ligne
           </div>
         </div>
@@ -241,3 +267,8 @@ export default function Awakening({ onInitiated }) {
     </div>
   );
 }
+"""
+
+with open(os.path.expanduser('~/renaissance/src/pages/Awakening.jsx'), 'w') as f:
+    f.write(awakening_jsx)
+print("Awakening.jsx ✓", len(awakening_jsx), "chars")
