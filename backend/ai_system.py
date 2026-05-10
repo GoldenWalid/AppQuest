@@ -108,7 +108,7 @@ async def _call_gemini(system: str, prompt: str) -> str:
     return response.text.strip()
 
 
-async def awaken_chat_turn(session_id: str, history: List[Dict[str, str]]) -> dict:
+async def awaken_chat_turn(session_id: str, history: List[Dict[str, str]], force_finalize: bool = False) -> dict:
     if not history:
         prompt = (
             "Ouvre l'éveil. Présente-toi brièvement comme une présence de seuil "
@@ -119,7 +119,10 @@ async def awaken_chat_turn(session_id: str, history: List[Dict[str, str]]) -> di
         last = history[-1]
         prior = history[:-1] if last["role"] == "user" else history
         user_turns = sum(1 for m in history if m["role"] == "user")
-        force_finalize = user_turns >= 14
+
+        # force_finalize peut venir du paramètre OU de l'auto-détection
+        if not force_finalize:
+            force_finalize = user_turns >= 14
 
         convo_parts = []
         for m in prior:
