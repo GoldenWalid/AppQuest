@@ -14,8 +14,8 @@ export const api = {
   logout: () => axios.post(`${API}/auth/logout`).then((r) => r.data),
 
   getProfile: () => axios.get(`${API}/profile`).then((r) => r.data),
-  awakenChat: (session_id, messages) =>
-    axios.post(`${API}/awaken/chat`, { session_id, messages }).then((r) => r.data),
+  awakenChat: (session_id, messages, force_finalize = false) =>
+    axios.post(`${API}/awaken/chat`, { session_id, messages, force_finalize }).then((r) => r.data),
   getStats: () => axios.get(`${API}/stats`).then((r) => r.data),
   getQuests: (type, status) => {
     const params = {};
@@ -31,4 +31,3 @@ export const api = {
   getSkills: () => axios.get(`${API}/skills`).then((r) => r.data),
   getAchievements: () => axios.get(`${API}/achievements`).then((r) => r.data),
   reset: () => axios.post(`${API}/reset`).then((r) => r.data),
-};
