@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from "react";
-import "@/App.css";
+import "@/styles/App.css";
 import {
   BrowserRouter,
   Routes,
