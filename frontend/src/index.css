@@ -1,13 +1,6 @@
-# Write App.css - new palette noir/vert/or/bleu manhwa style
-app_css = r"""@tailwind base;
+@tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-/* ============================================================
-   RENAISSANCE SYSTEM — Design System
-   Palette: Noir profond · Vert émeraude · Or · Bleu électrique
-   Style: Manhwa premium · Mobile-first · PWA-ready
-   ============================================================ */
 
 @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Chakra+Petch:wght@300;400;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
 
@@ -16,8 +9,6 @@ app_css = r"""@tailwind base;
   --bg-2:          #0D1217;
   --surface:       rgba(10, 18, 22, 0.7);
   --surface-2:     rgba(15, 25, 30, 0.85);
-
-  /* Couleurs principales */
   --green:         #00FF87;
   --green-dim:     #00CC6A;
   --green-glow:    0, 255, 135;
@@ -31,8 +22,6 @@ app_css = r"""@tailwind base;
   --purple-glow:   139, 92, 246;
   --red:           #FF3D71;
   --red-glow:      255, 61, 113;
-
-  /* Texte */
   --text:          #E8F0F2;
   --text-muted:    #6B8A94;
   --text-faint:    #2E4A54;
@@ -57,7 +46,6 @@ body {
   overflow-x: hidden;
 }
 
-/* Grille subtile */
 body::before {
   content: "";
   position: fixed;
@@ -71,12 +59,10 @@ body::before {
   z-index: 0;
 }
 
-/* ============ TYPOGRAPHIE ============ */
 .font-display { font-family: 'Orbitron', sans-serif; letter-spacing: 0.02em; }
 .font-accent  { font-family: 'Chakra Petch', sans-serif; }
 .font-mono    { font-family: 'JetBrains Mono', monospace; }
 
-/* ============ CARTE SYSTÈME ============ */
 .sys-card {
   background: var(--surface);
   backdrop-filter: blur(16px);
@@ -97,20 +83,16 @@ body::before {
     inset 0 1px 0 rgba(0, 255, 135, 0.1);
 }
 
-/* Carte or — pour quête principale & achievements S */
 .sys-card-gold {
   background: rgba(12, 10, 5, 0.85);
   border: 1px solid rgba(212, 175, 55, 0.35);
-  box-shadow:
-    0 0 30px rgba(212, 175, 55, 0.08),
-    inset 0 1px 0 rgba(212, 175, 55, 0.1);
+  box-shadow: 0 0 30px rgba(212, 175, 55, 0.08), inset 0 1px 0 rgba(212, 175, 55, 0.1);
 }
 .sys-card-gold:hover {
   border-color: rgba(212, 175, 55, 0.6);
   box-shadow: 0 0 40px rgba(212, 175, 55, 0.15);
 }
 
-/* ============ CADRE COINS ============ */
 .corner-frame { position: relative; }
 .corner-frame::before,
 .corner-frame::after {
@@ -122,11 +104,9 @@ body::before {
 }
 .corner-frame::before { top: -1px; left: -1px; border-top-width: 2px; border-left-width: 2px; border-color: var(--green); }
 .corner-frame::after  { bottom: -1px; right: -1px; border-bottom-width: 2px; border-right-width: 2px; border-color: var(--green); }
-
 .corner-frame-gold::before { border-color: var(--gold); }
 .corner-frame-gold::after  { border-color: var(--gold); }
 
-/* ============ SCANLINES ============ */
 .scanlines::after {
   content: "";
   position: absolute; inset: 0;
@@ -140,7 +120,6 @@ body::before {
   z-index: 1;
 }
 
-/* ============ BOUTONS ============ */
 .sys-btn {
   font-family: 'Orbitron', sans-serif;
   letter-spacing: 0.15em;
@@ -156,13 +135,6 @@ body::before {
   position: relative;
   overflow: hidden;
 }
-.sys-btn::before {
-  content: "";
-  position: absolute; inset: 0;
-  background: linear-gradient(135deg, transparent 40%, rgba(0,255,135,0.08) 100%);
-  opacity: 0; transition: opacity 0.2s;
-}
-.sys-btn:hover:not(:disabled)::before { opacity: 1; }
 .sys-btn:hover:not(:disabled) {
   background: var(--green);
   color: #000;
@@ -205,7 +177,6 @@ body::before {
   box-shadow: 0 0 24px rgba(var(--red-glow), 0.5);
 }
 
-/* ============ INPUT ============ */
 .sys-input {
   background: rgba(0, 0, 0, 0.6);
   border: 1px solid rgba(0, 255, 135, 0.25);
@@ -223,7 +194,6 @@ body::before {
 }
 .sys-input::placeholder { color: rgba(0, 255, 135, 0.3); }
 
-/* ============ BARRES XP ============ */
 .xp-bar {
   background: rgba(2, 6, 8, 0.9);
   border: 1px solid rgba(0, 255, 135, 0.2);
@@ -252,13 +222,11 @@ body::before {
   background: linear-gradient(90deg, #1A3A5C 0%, #2E86C1 60%, #4FACFE 100%);
   box-shadow: 0 0 12px rgba(var(--blue-glow), 0.6);
 }
-
 @keyframes shine {
   from { transform: translateX(-100%); }
   to   { transform: translateX(200%); }
 }
 
-/* ============ RANGS ============ */
 .rank-badge {
   font-family: 'Orbitron', sans-serif;
   font-weight: 900;
@@ -288,13 +256,11 @@ body::before {
   50%       { box-shadow: 0 0 28px rgba(255,215,0,0.4); }
 }
 
-/* ============ TEXTE LUMINEUX ============ */
 .glow-text-green  { text-shadow: 0 0 12px rgba(var(--green-glow), 0.7); }
 .glow-text-gold   { text-shadow: 0 0 12px rgba(var(--gold-glow), 0.7); }
 .glow-text-blue   { text-shadow: 0 0 12px rgba(var(--blue-glow), 0.6); }
 .glow-text        { text-shadow: 0 0 10px rgba(var(--green-glow), 0.6); }
 
-/* ============ BARRE DE PROGRESSION CARTOGRAPHIE ============ */
 .mapping-bar-track {
   background: rgba(2, 6, 8, 0.9);
   border: 1px solid rgba(0, 255, 135, 0.15);
@@ -314,37 +280,25 @@ body::before {
   box-shadow: 0 0 14px rgba(var(--gold-glow), 0.5);
 }
 
-/* ============ MODAL QUÊTE ============ */
 .quest-modal-overlay {
-  position: fixed;
-  inset: 0;
+  position: fixed; inset: 0;
   background: rgba(0, 0, 0, 0.85);
   backdrop-filter: blur(8px);
   z-index: 50;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: flex; align-items: center; justify-content: center;
   padding: 1rem;
 }
 .quest-modal {
   background: var(--bg-2);
   border: 1px solid rgba(0, 255, 135, 0.3);
-  box-shadow:
-    0 0 60px rgba(0, 255, 135, 0.1),
-    0 0 120px rgba(0, 0, 0, 0.8),
-    inset 0 1px 0 rgba(0, 255, 135, 0.08);
-  width: 100%;
-  max-width: 680px;
-  max-height: 90vh;
-  overflow-y: auto;
-  position: relative;
+  box-shadow: 0 0 60px rgba(0, 255, 135, 0.1), 0 0 120px rgba(0, 0, 0, 0.8), inset 0 1px 0 rgba(0, 255, 135, 0.08);
+  width: 100%; max-width: 680px; max-height: 90vh;
+  overflow-y: auto; position: relative;
 }
 
-/* ============ MINUTEUR ============ */
 .timer-display {
   font-family: 'Orbitron', sans-serif;
-  font-size: 2.5rem;
-  font-weight: 900;
+  font-size: 2.5rem; font-weight: 900;
   letter-spacing: 0.1em;
   color: var(--green);
   text-shadow: 0 0 20px rgba(var(--green-glow), 0.8);
@@ -360,7 +314,6 @@ body::before {
   50%       { opacity: 0.6; }
 }
 
-/* ============ LEVEL UP ============ */
 .level-up-overlay {
   position: fixed; inset: 0;
   background: rgba(0,0,0,0.92);
@@ -374,8 +327,7 @@ body::before {
   padding: 3rem 2.5rem;
   text-align: center;
   max-width: 480px; width: 90%;
-  position: relative;
-  overflow: hidden;
+  position: relative; overflow: hidden;
 }
 .level-up-card::before {
   content: "";
@@ -388,7 +340,6 @@ body::before {
   50%       { opacity: 1; }
 }
 
-/* ============ SKILL DROP ============ */
 .skill-drop-card {
   background: linear-gradient(135deg, #050010, #0d0020);
   border: 1px solid rgba(139, 92, 246, 0.5);
@@ -400,7 +351,6 @@ body::before {
   to   { transform: scale(1) translateY(0); opacity: 1; }
 }
 
-/* ============ NOTIFICATIONS SYSTÈME ============ */
 .sys-notification {
   font-family: 'Chakra Petch', sans-serif;
   background: rgba(8, 12, 14, 0.95);
@@ -411,7 +361,6 @@ body::before {
   font-size: 0.8rem;
 }
 
-/* ============ ANIMATIONS ============ */
 @keyframes fadeInUp {
   from { opacity: 0; transform: translateY(16px); }
   to   { opacity: 1; transform: translateY(0); }
@@ -428,20 +377,17 @@ body::before {
 }
 .float { animation: float 3s ease-in-out infinite; }
 
-/* ============ MOBILE ============ */
 @media (max-width: 640px) {
   .sys-btn { padding: 0.55rem 0.9rem; font-size: 0.7rem; letter-spacing: 0.1em; }
   .timer-display { font-size: 1.8rem; }
   .quest-modal { max-height: 95vh; }
 }
 
-/* ============ SCROLLBAR ============ */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: var(--bg); }
 ::-webkit-scrollbar-thumb { background: rgba(0, 255, 135, 0.25); border-radius: 0; }
 ::-webkit-scrollbar-thumb:hover { background: rgba(0, 255, 135, 0.5); }
 
-/* ============ SHADCN BASE ============ */
 @layer base {
   :root {
     --background: 210 20% 4%;
@@ -467,8 +413,3 @@ body::before {
   }
 }
 * { border-color: rgba(0, 255, 135, 0.15); }
-"""
-
-with open('/root/renaissance/src/styles/App.css', 'w') as f:
-    f.write(app_css)
-print("App.css écrit ✓", len(app_css), "chars")
