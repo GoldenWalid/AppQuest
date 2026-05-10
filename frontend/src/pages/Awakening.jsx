@@ -8,7 +8,6 @@ import { API } from "@/lib/api";
 
 const newSessionId = () => `awaken-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
-// 8 dimensions x ~12% chacune, cappé à 95% avant finalisation
 const calcProgress = (userTurns) => Math.min(95, userTurns * 12);
 
 export default function Awakening({ onInitiated }) {
@@ -77,7 +76,6 @@ export default function Awakening({ onInitiated }) {
     await sendTurn(messages, true);
   };
 
-  // ===== INTRO =====
   if (!started) {
     return (
       <div className="min-h-screen flex items-center justify-center p-4">
@@ -117,12 +115,10 @@ export default function Awakening({ onInitiated }) {
     );
   }
 
-  // ===== CHAT =====
   return (
     <div className="min-h-screen flex items-center justify-center p-4">
       <div className="max-w-3xl w-full sys-card corner-frame relative flex flex-col" style={{ height: "min(88vh, 820px)" }}>
 
-        {/* Header */}
         <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: "1px solid rgba(0,255,135,0.15)" }}>
           <div>
             <div className="font-accent text-[10px] tracking-[0.4em] uppercase mb-0.5" style={{ color: "rgba(0,255,135,0.6)" }}>
@@ -146,7 +142,6 @@ export default function Awakening({ onInitiated }) {
           </div>
         </div>
 
-        {/* Barre de progression cartographie */}
         <div className="px-5 pt-3 pb-2">
           <div className="flex items-center justify-between mb-1.5">
             <span className="font-accent text-[10px] tracking-[0.3em] uppercase" style={{ color: "rgba(0,255,135,0.5)" }}>
@@ -162,7 +157,6 @@ export default function Awakening({ onInitiated }) {
               style={{ width: `${progress}%` }}
             />
           </div>
-          {/* Bouton générer à 70% */}
           <AnimatePresence>
             {canEarlyGenerate && (
               <motion.div
@@ -184,7 +178,6 @@ export default function Awakening({ onInitiated }) {
           </AnimatePresence>
         </div>
 
-        {/* Messages */}
         <div
           ref={scrollRef}
           className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 space-y-4"
@@ -233,7 +226,6 @@ export default function Awakening({ onInitiated }) {
           )}
         </div>
 
-        {/* Input */}
         <div className="p-4" style={{ borderTop: "1px solid rgba(0,255,135,0.15)" }}>
           <div className="flex gap-2 items-end">
             <textarea
@@ -264,6 +256,3 @@ export default function Awakening({ onInitiated }) {
     </div>
   );
 }
-"""
-
-
