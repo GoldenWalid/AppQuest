@@ -6,6 +6,7 @@ import os
 import logging
 import re
 import uuid
+import random
 from pathlib import Path
 from pydantic import BaseModel
 from typing import List, Optional
@@ -33,7 +34,6 @@ def now_iso():
     return datetime.now(timezone.utc).isoformat()
 
 
-# ============ XP / RANK ============
 def level_from_xp(total_xp: int) -> int:
     lvl = 1
     while (lvl * lvl * 100) <= total_xp:
@@ -59,7 +59,6 @@ def rank_from_level(level: int) -> str:
     return "S"
 
 
-# ============ MODELS ============
 class ProfileOut(BaseModel):
     id: str
     user_id: str
@@ -135,9 +134,10 @@ class CompleteResult(BaseModel):
     new_level: Optional[int] = None
     new_rank: Optional[str] = None
     unlocked_achievements: List[AchievementOut] = []
+    skill_leveled_up: Optional[dict] = None
+    skill_drop: Optional[dict] = None
 
 
-# ============ HELPERS (all scoped by user_id) ============
 async def get_profile_doc(user_id: str):
     return await db.profile.find_one({"user_id": user_id}, {"_id": 0})
 
@@ -201,7 +201,7 @@ async def check_achievements(user_id: str) -> List[dict]:
                 unlock = True
         if "streak" in cond and stats.daily_streak >= 3:
             unlock = True
-        if "première" in cond or "first" in cond or "premier" in cond:
+        if "premiere" in cond or "first" in cond or "premier" in cond:
             if stats.quests_completed >= 1:
                 unlock = True
         if unlock:
@@ -215,7 +215,6 @@ async def check_achievements(user_id: str) -> List[dict]:
     return newly
 
 
-# ============ APP ROUTES ============
 @api_router.get("/")
 async def root():
     return {"message": "SYSTEM ONLINE"}
@@ -229,7 +228,6 @@ async def get_profile(user: User = Depends(require_user)):
     return ProfileOut(**doc)
 
 
-# ============ AWAKENING CHAT ============
 class ChatMsg(BaseModel):
     role: str
     content: str
@@ -238,13 +236,14 @@ class ChatMsg(BaseModel):
 class ChatReq(BaseModel):
     session_id: str
     messages: List[ChatMsg] = []
+    force_finalize: bool = False
 
 
 @api_router.post("/awaken/chat")
 async def awaken_chat(req: ChatReq, user: User = Depends(require_user)):
     history = [m.model_dump() for m in req.messages]
     try:
-        result = await awaken_chat_turn(req.session_id, history)
+        result = await awaken_chat_turn(req.session_id, history, force_finalize=req.force_finalize)
     except Exception as e:
         logger.exception("awaken_chat failed")
         raise HTTPException(status_code=500, detail=f"System error: {str(e)}")
@@ -278,155 +277,91 @@ def _extract_name_from_history(history: List[dict]) -> Optional[str]:
     return None
 
 
-async def _save_architecture(
-    user_id: str,
-    name: str,
-    about_me: str,
-    main_goal: str,
-    context: str,
-    arch: dict,
-) -> ProfileOut:
-    """Persist profile + skills + quests + achievements scoped to user_id."""
+async def _save_architecture(user_id, name, about_me, main_goal, context, arch) -> ProfileOut:
     pid = str(uuid.uuid4())
     profile = {
-        "id": pid,
-        "user_id": user_id,
-        "name": name,
-        "about_me": about_me,
-        "main_goal": main_goal,
-        "context": context,
+        "id": pid, "user_id": user_id, "name": name,
+        "about_me": about_me, "main_goal": main_goal, "context": context,
         "class_title": arch.get("class_title", "Hunter"),
         "system_message": arch.get("system_message", "Welcome, Hunter."),
-        "initiated": True,
-        "created_at": now_iso(),
+        "initiated": True, "created_at": now_iso(),
     }
-
-    # Reset only this user's data
     await db.profile.delete_many({"user_id": user_id})
     await db.quests.delete_many({"user_id": user_id})
     await db.skills.delete_many({"user_id": user_id})
     await db.achievements.delete_many({"user_id": user_id})
-
     await db.profile.insert_one(dict(profile))
 
     for s in arch.get("parallel_skills", []):
         await db.skills.insert_one({
-            "id": str(uuid.uuid4()),
-            "user_id": user_id,
-            "name": s.get("name", "Skill"),
-            "description": s.get("description", ""),
-            "icon": s.get("icon", "star"),
-            "level": 1,
-            "xp": 0,
-            "xp_to_next": 100,
+            "id": str(uuid.uuid4()), "user_id": user_id,
+            "name": s.get("name", "Skill"), "description": s.get("description", ""),
+            "icon": s.get("icon", "star"), "level": 1, "xp": 0, "xp_to_next": 100,
         })
 
     mq = arch.get("main_quest", {})
     await db.quests.insert_one({
-        "id": str(uuid.uuid4()),
-        "user_id": user_id,
-        "title": mq.get("title", "Main Goal"),
-        "description": mq.get("description", ""),
-        "xp_reward": mq.get("xp_reward", 5000),
-        "rank": mq.get("rank", "S"),
-        "status": "active",
-        "type": "main",
-        "skill": None,
-        "completed_at": None,
-        "created_at": now_iso(),
-        "date_for": None,
-        "steps": [],
+        "id": str(uuid.uuid4()), "user_id": user_id,
+        "title": mq.get("title", "Main Goal"), "description": mq.get("description", ""),
+        "xp_reward": mq.get("xp_reward", 5000), "rank": mq.get("rank", "S"),
+        "status": "active", "type": "main", "skill": None,
+        "completed_at": None, "created_at": now_iso(), "date_for": None, "steps": [],
     })
 
     for sg in arch.get("sub_goals", []):
         await db.quests.insert_one({
-            "id": str(uuid.uuid4()),
-            "user_id": user_id,
-            "title": sg.get("title", "Sub-goal"),
-            "description": sg.get("description", ""),
-            "xp_reward": sg.get("xp_reward", 500),
-            "rank": sg.get("rank", "A"),
-            "status": "active",
-            "type": "sub",
-            "skill": sg.get("skill"),
-            "completed_at": None,
-            "created_at": now_iso(),
-            "date_for": None,
-            "steps": [],
+            "id": str(uuid.uuid4()), "user_id": user_id,
+            "title": sg.get("title", "Sub-goal"), "description": sg.get("description", ""),
+            "xp_reward": sg.get("xp_reward", 500), "rank": sg.get("rank", "A"),
+            "status": "active", "type": "sub", "skill": sg.get("skill"),
+            "completed_at": None, "created_at": now_iso(), "date_for": None, "steps": [],
         })
 
     for po in arch.get("parallel_objectives", []):
         await db.quests.insert_one({
-            "id": str(uuid.uuid4()),
-            "user_id": user_id,
-            "title": po.get("title", "Parallel"),
-            "description": po.get("description", ""),
-            "xp_reward": po.get("xp_reward", 600),
-            "rank": po.get("rank", "B"),
-            "status": "active",
-            "type": "parallel",
-            "skill": po.get("skill"),
-            "completed_at": None,
-            "created_at": now_iso(),
-            "date_for": None,
-            "steps": [],
+            "id": str(uuid.uuid4()), "user_id": user_id,
+            "title": po.get("title", "Parallel"), "description": po.get("description", ""),
+            "xp_reward": po.get("xp_reward", 600), "rank": po.get("rank", "B"),
+            "status": "active", "type": "parallel", "skill": po.get("skill"),
+            "completed_at": None, "created_at": now_iso(), "date_for": None, "steps": [],
         })
 
     today_str = date.today().isoformat()
     for dq in arch.get("initial_daily_quests", []):
         await db.quests.insert_one({
-            "id": str(uuid.uuid4()),
-            "user_id": user_id,
-            "title": dq.get("title", "Daily"),
-            "description": dq.get("description", ""),
-            "xp_reward": dq.get("xp_reward", 100),
-            "rank": dq.get("rank", "D"),
-            "status": "active",
-            "type": "daily",
-            "skill": dq.get("skill"),
-            "completed_at": None,
-            "created_at": now_iso(),
-            "date_for": today_str,
-            "steps": [],
+            "id": str(uuid.uuid4()), "user_id": user_id,
+            "title": dq.get("title", "Daily"), "description": dq.get("description", ""),
+            "xp_reward": dq.get("xp_reward", 100), "rank": dq.get("rank", "D"),
+            "status": "active", "type": "daily", "skill": dq.get("skill"),
+            "completed_at": None, "created_at": now_iso(), "date_for": today_str, "steps": [],
         })
 
-    achievements = arch.get("achievements") or []
-    if not achievements:
-        achievements = [
-            {"title": "Premier Pas", "description": "Compléter ta première quête.", "rank": "E", "condition": "Compléter 1 quête"},
-            {"title": "Série", "description": "Maintenir un streak de 3 jours.", "rank": "D", "condition": "Streak de 3 jours"},
-            {"title": "Ascension", "description": "Atteindre le niveau 5.", "rank": "C", "condition": "Atteindre le niveau 5"},
-            {"title": "Maître", "description": "Atteindre le niveau 10.", "rank": "B", "condition": "Atteindre le niveau 10"},
-            {"title": "Transcendance", "description": "Atteindre le niveau 20.", "rank": "A", "condition": "Atteindre le niveau 20"},
-            {"title": "Monarque", "description": "Atteindre le rang S.", "rank": "S", "condition": "Atteindre le rang S"},
-        ]
+    achievements = arch.get("achievements") or [
+        {"title": "Premier Pas", "description": "Completer ta premiere quete.", "rank": "E", "condition": "premier quete"},
+        {"title": "Serie", "description": "Maintenir un streak de 3 jours.", "rank": "D", "condition": "streak de 3 jours"},
+        {"title": "Ascension", "description": "Atteindre le niveau 5.", "rank": "C", "condition": "niveau 5"},
+        {"title": "Maitre", "description": "Atteindre le niveau 10.", "rank": "B", "condition": "niveau 10"},
+        {"title": "Transcendance", "description": "Atteindre le niveau 20.", "rank": "A", "condition": "niveau 20"},
+        {"title": "Monarque", "description": "Atteindre le rang S.", "rank": "S", "condition": "rang S"},
+    ]
     for ach in achievements:
         await db.achievements.insert_one({
-            "id": str(uuid.uuid4()),
-            "user_id": user_id,
-            "title": ach.get("title", "Achievement"),
-            "description": ach.get("description", ""),
-            "rank": ach.get("rank", "E"),
-            "condition": ach.get("condition", ""),
-            "unlocked": False,
-            "unlocked_at": None,
+            "id": str(uuid.uuid4()), "user_id": user_id,
+            "title": ach.get("title", "Achievement"), "description": ach.get("description", ""),
+            "rank": ach.get("rank", "E"), "condition": ach.get("condition", ""),
+            "unlocked": False, "unlocked_at": None,
         })
 
     return ProfileOut(**profile)
 
 
-# ============ STATS / QUESTS / SKILLS / ACHIEVEMENTS ============
 @api_router.get("/stats", response_model=StatsOut)
 async def stats(user: User = Depends(require_user)):
     return await compute_stats(user.user_id)
 
 
 @api_router.get("/quests", response_model=List[QuestOut])
-async def list_quests(
-    type: Optional[str] = None,
-    status: Optional[str] = None,
-    user: User = Depends(require_user),
-):
+async def list_quests(type: Optional[str] = None, status: Optional[str] = None, user: User = Depends(require_user)):
     q = {"user_id": user.user_id}
     if type:
         q["type"] = type
@@ -459,9 +394,11 @@ async def _complete_quest_internal(user_id: str, quest_id: str) -> CompleteResul
         {"$set": {"status": "completed", "completed_at": now_iso()}},
     )
 
+    skill_leveled_up_data = None
     if q.get("skill"):
         skill = await db.skills.find_one({"user_id": user_id, "name": q["skill"]}, {"_id": 0})
         if skill:
+            prev_skill_level = skill["level"]
             skill_xp_gain = max(10, q["xp_reward"] // 5)
             new_xp = skill["xp"] + skill_xp_gain
             new_level = skill["level"]
@@ -474,6 +411,32 @@ async def _complete_quest_internal(user_id: str, quest_id: str) -> CompleteResul
                 {"user_id": user_id, "id": skill["id"]},
                 {"$set": {"xp": new_xp, "level": new_level, "xp_to_next": xp_to_next}},
             )
+            if new_level > prev_skill_level:
+                skill_leveled_up_data = {"name": skill["name"], "new_level": new_level, "xp_gained": skill_xp_gain}
+
+    skill_drop_data = None
+    if random.random() < 0.20:
+        all_skills = await db.skills.find({"user_id": user_id}, {"_id": 0}).to_list(100)
+        existing_names = {s["name"] for s in all_skills}
+        candidates = [
+            {"name": "Ancrage Corporel", "description": "Revenir dans le corps, sortir du mental.", "icon": "heart"},
+            {"name": "Ecoute du Vivant", "description": "Percevoir ce qui est vivant autour de soi.", "icon": "eye"},
+            {"name": "Souffle Conscient", "description": "Utiliser la respiration comme outil de presence.", "icon": "flame"},
+            {"name": "Marche en Conscience", "description": "Se deplacer avec pleine attention.", "icon": "target"},
+            {"name": "Verticalite Interieure", "description": "Tenir sa posture interieure face aux defis.", "icon": "zap"},
+            {"name": "Lecture du Silence", "description": "Trouver du sens dans les moments de vide.", "icon": "brain"},
+            {"name": "Resonance Emotionnelle", "description": "Sentir et nommer ses etats interieurs.", "icon": "star"},
+            {"name": "Presence au Seuil", "description": "Rester present dans les moments de transition.", "icon": "shield"},
+        ]
+        new_candidates = [c for c in candidates if c["name"] not in existing_names]
+        if new_candidates:
+            chosen = random.choice(new_candidates)
+            await db.skills.insert_one({
+                "id": str(uuid.uuid4()), "user_id": user_id,
+                "name": chosen["name"], "description": chosen["description"],
+                "icon": chosen["icon"], "level": 1, "xp": 0, "xp_to_next": 100,
+            })
+            skill_drop_data = {"name": chosen["name"], "xp": 0}
 
     new_stats = await compute_stats(user_id)
     leveled_up = new_stats.level > prev_level
@@ -487,6 +450,8 @@ async def _complete_quest_internal(user_id: str, quest_id: str) -> CompleteResul
         new_level=new_stats.level if leveled_up else None,
         new_rank=new_stats.rank if leveled_up else None,
         unlocked_achievements=[AchievementOut(**a) for a in newly_unlocked],
+        skill_leveled_up=skill_leveled_up_data,
+        skill_drop=skill_drop_data,
     )
 
 
@@ -506,36 +471,19 @@ async def decompose_quest_endpoint(quest_id: str, user: User = Depends(require_u
         raise HTTPException(status_code=404, detail="Quest not found")
     if q["status"] == "completed":
         raise HTTPException(status_code=400, detail="Quest already completed")
-
     profile = await get_profile_doc(user.user_id) or {}
     try:
         result = await decompose_quest(profile, q)
     except Exception as e:
         logger.exception("decompose failed")
         raise HTTPException(status_code=500, detail=f"Decomposition failed: {str(e)}")
-
     raw_steps = result.get("steps", []) or []
-    steps = [
-        {
-            "id": str(uuid.uuid4()),
-            "title": s.get("title", "Étape"),
-            "description": s.get("description", ""),
-            "done": False,
-        }
-        for s in raw_steps
-    ]
+    steps = [{"id": str(uuid.uuid4()), "title": s.get("title", "Etape"), "description": s.get("description", ""), "done": False} for s in raw_steps]
     if not steps:
         raise HTTPException(status_code=500, detail="AI returned no steps")
-
-    await db.quests.update_one(
-        {"user_id": user.user_id, "id": quest_id},
-        {"$set": {"steps": steps}},
-    )
+    await db.quests.update_one({"user_id": user.user_id, "id": quest_id}, {"$set": {"steps": steps}})
     q = await db.quests.find_one({"user_id": user.user_id, "id": quest_id}, {"_id": 0})
-    return DecomposeOut(
-        quest=QuestOut(**q),
-        system_message=result.get("system_message", "Décompose. Avance pas à pas."),
-    )
+    return DecomposeOut(quest=QuestOut(**q), system_message=result.get("system_message", "Decompose. Avance pas a pas."))
 
 
 class StepToggleResult(BaseModel):
@@ -545,19 +493,13 @@ class StepToggleResult(BaseModel):
 
 
 @api_router.patch("/quests/{quest_id}/steps/{step_id}", response_model=StepToggleResult)
-async def toggle_step(
-    quest_id: str,
-    step_id: str,
-    req: StepToggleReq,
-    user: User = Depends(require_user),
-):
+async def toggle_step(quest_id: str, step_id: str, req: StepToggleReq, user: User = Depends(require_user)):
     q = await db.quests.find_one({"user_id": user.user_id, "id": quest_id}, {"_id": 0})
     if not q:
         raise HTTPException(status_code=404, detail="Quest not found")
     steps = q.get("steps") or []
     if not steps:
         raise HTTPException(status_code=400, detail="Quest has no steps")
-
     found = False
     for s in steps:
         if s["id"] == step_id:
@@ -566,26 +508,14 @@ async def toggle_step(
             break
     if not found:
         raise HTTPException(status_code=404, detail="Step not found")
-
-    await db.quests.update_one(
-        {"user_id": user.user_id, "id": quest_id},
-        {"$set": {"steps": steps}},
-    )
-
+    await db.quests.update_one({"user_id": user.user_id, "id": quest_id}, {"$set": {"steps": steps}})
     auto_completed = False
-    completion: Optional[CompleteResult] = None
+    completion = None
     if all(s["done"] for s in steps) and q["status"] == "active":
         completion = await _complete_quest_internal(user.user_id, quest_id)
         auto_completed = True
-
-    updated = await db.quests.find_one(
-        {"user_id": user.user_id, "id": quest_id}, {"_id": 0}
-    )
-    return StepToggleResult(
-        quest=QuestOut(**updated),
-        auto_completed=auto_completed,
-        completion=completion,
-    )
+    updated = await db.quests.find_one({"user_id": user.user_id, "id": quest_id}, {"_id": 0})
+    return StepToggleResult(quest=QuestOut(**updated), auto_completed=auto_completed, completion=completion)
 
 
 @api_router.post("/quests/generate-daily")
@@ -595,32 +525,20 @@ async def gen_daily(user: User = Depends(require_user)):
         raise HTTPException(status_code=400, detail="No profile")
     skills = await db.skills.find({"user_id": user.user_id}, {"_id": 0}).to_list(100)
     today_str = date.today().isoformat()
-    completed_today = await db.quests.count_documents({
-        "user_id": user.user_id, "type": "daily",
-        "date_for": today_str, "status": "completed",
-    })
+    completed_today = await db.quests.count_documents({"user_id": user.user_id, "type": "daily", "date_for": today_str, "status": "completed"})
     try:
         result = await generate_daily_quests(profile, skills, completed_today)
     except Exception as e:
         logger.exception("daily gen failed")
         raise HTTPException(status_code=500, detail=f"Generation failed: {str(e)}")
-
     created = []
     for dq in result.get("daily_quests", []):
         doc = {
-            "id": str(uuid.uuid4()),
-            "user_id": user.user_id,
-            "title": dq.get("title", "Daily"),
-            "description": dq.get("description", ""),
-            "xp_reward": dq.get("xp_reward", 100),
-            "rank": dq.get("rank", "D"),
-            "status": "active",
-            "type": "daily",
-            "skill": dq.get("skill"),
-            "completed_at": None,
-            "created_at": now_iso(),
-            "date_for": today_str,
-            "steps": [],
+            "id": str(uuid.uuid4()), "user_id": user.user_id,
+            "title": dq.get("title", "Daily"), "description": dq.get("description", ""),
+            "xp_reward": dq.get("xp_reward", 100), "rank": dq.get("rank", "D"),
+            "status": "active", "type": "daily", "skill": dq.get("skill"),
+            "completed_at": None, "created_at": now_iso(), "date_for": today_str, "steps": [],
         }
         await db.quests.insert_one(doc)
         created.append(QuestOut(**doc))
@@ -649,7 +567,6 @@ async def reset_all(user: User = Depends(require_user)):
     return {"ok": True}
 
 
-# Mount auth + api routers
 api_router.include_router(make_auth_router(db))
 app.include_router(api_router)
 
@@ -676,6 +593,8 @@ async def security_headers(request, call_next):
 @app.on_event("shutdown")
 async def shutdown_db_client():
     client.close()
+
+
 if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", 8000))
