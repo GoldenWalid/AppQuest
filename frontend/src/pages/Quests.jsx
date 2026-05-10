@@ -1,12 +1,8 @@
-import os
-
-# ===== Quests.jsx — modal plein écran + minuteur + skill drop =====
-quests_jsx = r"""import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Check, Loader2, Sparkles, Swords, Layers,
-  ChevronDown, ChevronUp, X, Timer, Play, Pause,
-  Trophy, Star
+  X, Timer, Play, Pause, Trophy, Star
 } from "lucide-react";
 import { toast } from "sonner";
 import { RankBadge } from "@/components/RankBadge";
@@ -19,7 +15,6 @@ const TABS = [
   { key: "parallel", label: "Parallèles" },
 ];
 
-// ===== MINUTEUR =====
 function useTimer() {
   const [seconds, setSeconds] = useState(0);
   const [running, setRunning] = useState(false);
@@ -56,11 +51,9 @@ function useTimer() {
   return { seconds, running, start, pause, reset, fmt };
 }
 
-// ===== MODAL QUÊTE =====
-function QuestModal({ quest, onClose, onComplete, onDecompose, onToggleStep, completing, decomposing, togglingStep, onLoad }) {
+function QuestModal({ quest, onClose, onComplete, onDecompose, onToggleStep, completing, decomposing, togglingStep }) {
   const timer = useTimer();
   const [validated, setValidated] = useState(false);
-  const [declining, setDeclining] = useState(false);
   const hasSteps = (quest.steps || []).length > 0;
   const stepsDone = (quest.steps || []).filter((s) => s.done).length;
   const totalSteps = (quest.steps || []).length;
@@ -68,7 +61,7 @@ function QuestModal({ quest, onClose, onComplete, onDecompose, onToggleStep, com
   const handleValidate = async () => {
     setValidated(true);
     timer.start();
-    toast.success("[ RENAISSANCE ] Quête activée — minuteur lancé !", { description: "Complete les étapes et valide pour gagner ton XP." });
+    toast.success("[ RENAISSANCE ] Quête activée — minuteur lancé !");
   };
 
   const handleComplete = async () => {
@@ -79,10 +72,9 @@ function QuestModal({ quest, onClose, onComplete, onDecompose, onToggleStep, com
   };
 
   const handleDecline = () => {
-    setDeclining(true);
     timer.reset();
     toast.info("Quête déclinée — elle restera disponible.");
-    setTimeout(onClose, 400);
+    onClose();
   };
 
   return (
@@ -100,7 +92,6 @@ function QuestModal({ quest, onClose, onComplete, onDecompose, onToggleStep, com
         transition={{ type: "spring", damping: 22, stiffness: 300 }}
         className={`quest-modal corner-frame ${quest.rank === "S" ? "corner-frame-gold" : ""}`}
       >
-        {/* Header modal */}
         <div className="flex items-start justify-between p-6 pb-4" style={{ borderBottom: "1px solid rgba(0,255,135,0.12)" }}>
           <div className="flex-1 pr-4">
             <div className="flex items-center gap-2 mb-2 flex-wrap">
@@ -121,14 +112,11 @@ function QuestModal({ quest, onClose, onComplete, onDecompose, onToggleStep, com
           </button>
         </div>
 
-        {/* Corps */}
         <div className="p-6 space-y-6">
-          {/* Description */}
           <p className="leading-relaxed text-sm sm:text-base" style={{ color: "var(--text)" }}>
             {quest.description}
           </p>
 
-          {/* Minuteur (visible après validation) */}
           <AnimatePresence>
             {validated && (
               <motion.div
@@ -159,7 +147,6 @@ function QuestModal({ quest, onClose, onComplete, onDecompose, onToggleStep, com
             )}
           </AnimatePresence>
 
-          {/* Étapes */}
           {hasSteps && (
             <div>
               <div className="font-accent text-[10px] tracking-[0.3em] uppercase mb-3" style={{ color: "rgba(0,255,135,0.5)" }}>
@@ -208,7 +195,6 @@ function QuestModal({ quest, onClose, onComplete, onDecompose, onToggleStep, com
             </div>
           )}
 
-          {/* Décomposer si pas d'étapes */}
           {!hasSteps && validated && (
             <button
               onClick={() => onDecompose(quest)}
@@ -221,7 +207,6 @@ function QuestModal({ quest, onClose, onComplete, onDecompose, onToggleStep, com
           )}
         </div>
 
-        {/* Footer boutons */}
         <div className="p-6 pt-0 flex flex-col sm:flex-row gap-3">
           {!validated ? (
             <>
@@ -234,11 +219,7 @@ function QuestModal({ quest, onClose, onComplete, onDecompose, onToggleStep, com
             </>
           ) : (
             <>
-              <button
-                onClick={handleComplete}
-                disabled={completing}
-                className="sys-btn flex-1 inline-flex items-center justify-center gap-2"
-              >
+              <button onClick={handleComplete} disabled={completing} className="sys-btn flex-1 inline-flex items-center justify-center gap-2">
                 {completing ? <Loader2 size={14} className="animate-spin" /> : <Trophy size={14} />}
                 Quête complétée — +{quest.xp_reward} XP
               </button>
@@ -253,7 +234,6 @@ function QuestModal({ quest, onClose, onComplete, onDecompose, onToggleStep, com
   );
 }
 
-// ===== PAGE PRINCIPALE =====
 export default function Quests() {
   const [tab, setTab] = useState("daily");
   const [questsByTab, setQuestsByTab] = useState({ daily: [], sub: [], parallel: [] });
@@ -282,12 +262,10 @@ export default function Quests() {
     (res.unlocked_achievements || []).forEach((a) =>
       toast.success(`Succès débloqué: ${a.title}`, { description: a.description })
     );
-    // Skill drop
     if (res.skill_drop) {
       setSkillDrop(res.skill_drop);
       setTimeout(() => setSkillDrop(null), 6000);
     }
-    // Skill level up
     if (res.skill_leveled_up) {
       toast.success(`[ COMPÉTENCE ] ${res.skill_leveled_up.name} niveau ${res.skill_leveled_up.new_level} !`, {
         description: `+${res.skill_leveled_up.xp_gained} XP de compétence`,
@@ -298,7 +276,7 @@ export default function Quests() {
   const complete = async (q, elapsed) => {
     setCompleting(q.id);
     try {
-      const res = await api.completeQuest(q.id, { elapsed });
+      const res = await api.completeQuest(q.id);
       toast.success("Quête complétée !", { description: `+${res.xp_gained} XP${elapsed ? ` · ${elapsed}` : ""}` });
       handleLevelUpAndAchievements(res);
       await load();
@@ -315,7 +293,6 @@ export default function Quests() {
       const res = await api.decomposeQuest(q.id);
       toast.success("Quête décomposée", { description: res.system_message });
       await load();
-      // Recharge la quête sélectionnée avec les nouvelles étapes
       const updated = await api.getQuests(tab);
       const freshQ = updated.find((x) => x.id === q.id);
       if (freshQ) setSelectedQuest(freshQ);
@@ -363,7 +340,6 @@ export default function Quests() {
 
   return (
     <div className="space-y-6" data-testid="quests-page">
-      {/* En-tête */}
       <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
         <div>
           <div className="font-accent text-xs tracking-[0.4em] uppercase mb-1" style={{ color: "rgba(0,255,135,0.6)" }}>
@@ -383,7 +359,6 @@ export default function Quests() {
         )}
       </div>
 
-      {/* Tabs */}
       <div className="flex gap-0 overflow-x-auto" style={{ borderBottom: "1px solid rgba(0,255,135,0.15)" }}>
         {TABS.map((t) => (
           <button key={t.key} data-testid={`tab-${t.key}`} onClick={() => setTab(t.key)}
@@ -397,7 +372,6 @@ export default function Quests() {
         ))}
       </div>
 
-      {/* Contenu */}
       {loading ? (
         <div className="font-mono" style={{ color: "var(--green)" }}>Chargement...</div>
       ) : current.length === 0 ? (
@@ -432,7 +406,6 @@ export default function Quests() {
         </>
       )}
 
-      {/* Modal quête */}
       <AnimatePresence>
         {selectedQuest && (
           <QuestModal
@@ -448,14 +421,13 @@ export default function Quests() {
         )}
       </AnimatePresence>
 
-      {/* Skill drop notification */}
       <AnimatePresence>
         {skillDrop && (
           <motion.div
             initial={{ opacity: 0, scale: 0.5, y: 40 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.8, y: 20 }}
-            className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 skill-drop-toast p-5 text-center"
+            className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 skill-drop-card p-5 text-center"
             style={{ minWidth: 280, maxWidth: 340 }}
           >
             <div className="font-accent text-[10px] tracking-[0.4em] uppercase mb-2" style={{ color: "rgba(139,92,246,0.8)" }}>
@@ -475,7 +447,6 @@ export default function Quests() {
   );
 }
 
-// ===== LIGNE QUÊTE (clic pour ouvrir modal) =====
 const QuestRow = ({ q, onClick, completed }) => {
   const hasSteps = (q.steps || []).length > 0;
   const stepsDone = (q.steps || []).filter((s) => s.done).length;
@@ -488,7 +459,6 @@ const QuestRow = ({ q, onClick, completed }) => {
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, scale: 0.95 }}
       className="sys-card p-4 sm:p-5 cursor-pointer"
-      style={{ textDecoration: completed ? "none" : "none", opacity: completed ? 0.6 : 1 }}
       onClick={onClick}
       data-testid={`quest-card-${q.id}`}
     >
@@ -519,7 +489,6 @@ const QuestRow = ({ q, onClick, completed }) => {
           <p className="text-xs sm:text-sm mt-1 line-clamp-2 leading-relaxed" style={{ color: "var(--text-muted)" }}>
             {q.description}
           </p>
-          {/* Barre étapes si en cours */}
           {hasSteps && !completed && stepsDone > 0 && (
             <div className="mt-2 xp-bar" style={{ height: "4px" }}>
               <div className="xp-bar-fill" style={{ width: `${(stepsDone / totalSteps) * 100}%` }} />
@@ -535,8 +504,3 @@ const QuestRow = ({ q, onClick, completed }) => {
     </motion.div>
   );
 };
-"""
-
-with open(os.path.expanduser('~/renaissance/src/pages/Quests.jsx'), 'w') as f:
-    f.write(quests_jsx)
-print("Quests.jsx ✓", len(quests_jsx), "chars")
