@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Activity, Flame, Trophy, Target, Star, TrendingUp } from "lucide-react";
 import { RankBadge } from "@/components/RankBadge";
@@ -12,11 +12,30 @@ export default function Dashboard({ profile }) {
   const [mainQuests, setMainQuests] = useState([]);
   const [levelUp, setLevelUp] = useState(null);
   const [newSkill, setNewSkill] = useState(null);
+  const prevLevel = useRef(null);
+  const prevSkillIds = useRef(null);
 
   const load = async () => {
     const [s, sk, mq] = await Promise.all([
       api.getStats(), api.getSkills(), api.getQuests("main"),
     ]);
+
+    // Détecter level up
+    if (prevLevel.current !== null && s.level > prevLevel.current) {
+      setLevelUp({ level: s.level, rank: s.rank });
+    }
+    prevLevel.current = s.level;
+
+    // Détecter nouvelle compétence
+    if (prevSkillIds.current !== null) {
+      const newOnes = sk.filter(s => !prevSkillIds.current.includes(s.id));
+      if (newOnes.length > 0) {
+        setNewSkill(newOnes[0]);
+        setTimeout(() => setNewSkill(null), 4000);
+      }
+    }
+    prevSkillIds.current = sk.map(s => s.id);
+
     setStats(s);
     setSkills(sk);
     setMainQuests(mq);
@@ -33,6 +52,7 @@ export default function Dashboard({ profile }) {
   return (
     <div className="space-y-8" data-testid="dashboard">
 
+      {/* HEADER */}
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
         className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
         <div>
@@ -50,6 +70,7 @@ export default function Dashboard({ profile }) {
         <RankBadge rank={stats.rank} className="text-lg px-4 py-1.5" />
       </motion.div>
 
+      {/* SYSTEM MESSAGE */}
       {profile?.system_message && (
         <div className="sys-card corner-frame scanlines relative p-5" data-testid="system-message">
           <div className="font-accent text-[10px] tracking-[0.4em] uppercase mb-2" style={{ color: "rgba(0,255,135,0.6)" }}>
@@ -61,13 +82,15 @@ export default function Dashboard({ profile }) {
         </div>
       )}
 
+      {/* STATS GRID */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <StatTile icon={Activity} label="Level"   value={stats.level}                     color="green"  testid="stat-level" />
-        <StatTile icon={Target}   label="XP Total" value={stats.total_xp.toLocaleString()} color="blue"   testid="stat-xp" />
-        <StatTile icon={Trophy}   label="Quêtes"  value={stats.quests_completed}           color="gold"   testid="stat-quests" />
-        <StatTile icon={Flame}    label="Streak"  value={`${stats.daily_streak ?? 0}j`}    color="purple" testid="stat-streak" />
+        <StatTile icon={Activity} label="Level"    value={stats.level}                      color="green"  testid="stat-level" />
+        <StatTile icon={Target}   label="XP Total" value={stats.total_xp.toLocaleString()}  color="blue"   testid="stat-xp" />
+        <StatTile icon={Trophy}   label="Quêtes"   value={stats.quests_completed}            color="gold"   testid="stat-quests" />
+        <StatTile icon={Flame}    label="Streak"   value={`${stats.daily_streak ?? 0}j`}     color="purple" testid="stat-streak" />
       </div>
 
+      {/* BARRE XP */}
       <div className="sys-card p-5 sm:p-6" data-testid="xp-bar-container">
         <div className="flex items-center justify-between mb-2">
           <div className="font-display font-bold uppercase tracking-widest text-sm" style={{ color: "var(--green)" }}>
@@ -78,12 +101,8 @@ export default function Dashboard({ profile }) {
           </div>
         </div>
         <div className="xp-bar">
-          <motion.div
-            className="xp-bar-fill"
-            initial={{ width: 0 }}
-            animate={{ width: `${pct}%` }}
-            transition={{ duration: 1.4, ease: "easeOut" }}
-          />
+          <motion.div className="xp-bar-fill" initial={{ width: 0 }} animate={{ width: `${pct}%` }}
+            transition={{ duration: 1.4, ease: "easeOut" }} />
         </div>
         <div className="flex justify-between mt-1">
           <span className="font-mono text-[10px]" style={{ color: "rgba(0,255,135,0.4)" }}>LV.{stats.level}</span>
@@ -91,6 +110,7 @@ export default function Dashboard({ profile }) {
         </div>
       </div>
 
+      {/* COMPÉTENCES */}
       <section>
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-display text-lg sm:text-xl font-bold uppercase tracking-widest glow-text-green" style={{ color: "var(--green)" }}>
@@ -99,12 +119,11 @@ export default function Dashboard({ profile }) {
           <span className="font-mono text-xs" style={{ color: "var(--text-muted)" }}>{skills.length} actives</span>
         </div>
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-          {skills.map((s, idx) => (
-            <SkillCard key={s.id} skill={s} delay={idx * 0.08} />
-          ))}
+          {skills.map((s, idx) => <SkillCard key={s.id} skill={s} delay={idx * 0.08} />)}
         </div>
       </section>
 
+      {/* QUÊTE PRINCIPALE */}
       {mainQuests.length > 0 && (
         <section>
           <h2 className="font-display text-lg sm:text-xl font-bold uppercase tracking-widest mb-4 glow-text-gold" style={{ color: "var(--gold)" }}>
@@ -132,6 +151,7 @@ export default function Dashboard({ profile }) {
         </section>
       )}
 
+      {/* SKILL DROP POPUP */}
       <AnimatePresence>
         {newSkill && (
           <motion.div
@@ -153,6 +173,7 @@ export default function Dashboard({ profile }) {
         )}
       </AnimatePresence>
 
+      {/* LEVEL UP MODAL */}
       <LevelUpModal open={!!levelUp} level={levelUp?.level} rank={levelUp?.rank} onClose={() => setLevelUp(null)} />
     </div>
   );
@@ -162,41 +183,23 @@ const SkillCard = ({ skill: s, delay }) => {
   const Icon = getSkillIcon(s.icon);
   const pct = s.xp_to_next > 0 ? Math.min(100, (s.xp / s.xp_to_next) * 100) : 100;
   const isMaxing = pct >= 80;
-
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay, duration: 0.4 }}
-      className="sys-card p-4 sm:p-5"
-      data-testid={`skill-card-${s.name}`}
-    >
+    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay, duration: 0.4 }}
+      className="sys-card p-4 sm:p-5" data-testid={`skill-card-${s.name}`}>
       <div className="flex items-start justify-between mb-3">
         <div className="p-2" style={{ border: "1px solid rgba(0,255,135,0.3)", background: "rgba(0,255,135,0.07)" }}>
           <Icon size={18} style={{ color: "var(--green)" }} />
         </div>
         <div className="text-right">
-          <div className="font-display font-black text-sm" style={{ color: isMaxing ? "var(--gold)" : "var(--green)" }}>
-            LV.{s.level}
-          </div>
-          {s.level >= 10 && (
-            <div className="font-accent text-[9px] tracking-widest uppercase" style={{ color: "var(--gold)" }}>MAX</div>
-          )}
+          <div className="font-display font-black text-sm" style={{ color: isMaxing ? "var(--gold)" : "var(--green)" }}>LV.{s.level}</div>
+          {s.level >= 10 && <div className="font-accent text-[9px] tracking-widest uppercase" style={{ color: "var(--gold)" }}>MAX</div>}
         </div>
       </div>
-      <div className="font-display font-bold uppercase text-xs sm:text-sm tracking-wide mb-1" style={{ color: "var(--text)" }}>
-        {s.name}
-      </div>
-      <p className="text-xs leading-relaxed mb-3 line-clamp-2" style={{ color: "var(--text-muted)" }}>
-        {s.description}
-      </p>
+      <div className="font-display font-bold uppercase text-xs sm:text-sm tracking-wide mb-1" style={{ color: "var(--text)" }}>{s.name}</div>
+      <p className="text-xs leading-relaxed mb-3 line-clamp-2" style={{ color: "var(--text-muted)" }}>{s.description}</p>
       <div className={`xp-bar ${isMaxing ? "xp-bar-gold" : ""}`} style={{ height: "6px" }}>
-        <motion.div
-          className="xp-bar-fill"
-          initial={{ width: 0 }}
-          animate={{ width: `${pct}%` }}
-          transition={{ duration: 1.1, delay, ease: "easeOut" }}
-        />
+        <motion.div className="xp-bar-fill" initial={{ width: 0 }} animate={{ width: `${pct}%` }}
+          transition={{ duration: 1.1, delay, ease: "easeOut" }} />
       </div>
       <div className="flex justify-between mt-1">
         <span className="font-mono text-[10px]" style={{ color: "rgba(107,138,148,0.7)" }}>{s.xp} / {s.xp_to_next} XP</span>
@@ -211,10 +214,10 @@ const SkillCard = ({ skill: s, delay }) => {
 };
 
 const COLORS = {
-  green:  { text: "var(--green)",  border: "rgba(0,255,135,0.3)",   bg: "rgba(0,255,135,0.06)" },
-  blue:   { text: "var(--blue)",   border: "rgba(79,172,254,0.3)",  bg: "rgba(79,172,254,0.06)" },
-  gold:   { text: "var(--gold)",   border: "rgba(212,175,55,0.3)",  bg: "rgba(212,175,55,0.06)" },
-  purple: { text: "var(--purple)", border: "rgba(139,92,246,0.3)",  bg: "rgba(139,92,246,0.06)" },
+  green:  { text: "var(--green)",  border: "rgba(0,255,135,0.3)",  bg: "rgba(0,255,135,0.06)" },
+  blue:   { text: "var(--blue)",   border: "rgba(79,172,254,0.3)", bg: "rgba(79,172,254,0.06)" },
+  gold:   { text: "var(--gold)",   border: "rgba(212,175,55,0.3)", bg: "rgba(212,175,55,0.06)" },
+  purple: { text: "var(--purple)", border: "rgba(139,92,246,0.3)", bg: "rgba(139,92,246,0.06)" },
 };
 
 const StatTile = ({ icon: Icon, label, value, color = "green", testid }) => {
@@ -226,9 +229,7 @@ const StatTile = ({ icon: Icon, label, value, color = "green", testid }) => {
       </div>
       <div className="min-w-0">
         <div className="text-[10px] tracking-[0.3em] uppercase" style={{ color: "var(--text-muted)" }}>{label}</div>
-        <div className="font-display font-black text-xl sm:text-2xl leading-tight" style={{ color: c.text }}>
-          {value}
-        </div>
+        <div className="font-display font-black text-xl sm:text-2xl leading-tight" style={{ color: c.text }}>{value}</div>
       </div>
     </div>
   );
