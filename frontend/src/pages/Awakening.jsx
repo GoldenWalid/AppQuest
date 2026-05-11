@@ -3,11 +3,9 @@ import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Send, Loader2, Sparkles, RotateCcw, Zap } from "lucide-react";
 import { toast } from "sonner";
-import axios from "axios";
-import { API } from "@/lib/api";
+import { api } from "@/lib/api";
 
 const newSessionId = () => `awaken-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-
 const calcProgress = (userTurns) => Math.min(95, userTurns * 12);
 
 export default function Awakening({ onInitiated }) {
@@ -39,18 +37,14 @@ export default function Awakening({ onInitiated }) {
   const sendTurn = async (history, forceFinalize = false) => {
     setThinking(true);
     try {
-      const res = await axios.post(`${API}/awaken/chat`, {
-        session_id: sessionId,
-        messages: history,
-        force_finalize: forceFinalize,
-      });
-      if (res.data.done) {
+      const res = await api.awakenChat(sessionId, history, forceFinalize);
+      if (res.done) {
         setFinalizing(true);
-        toast.success("[ RENAISSANCE ] Profil activé", { description: res.data.system_message });
+        toast.success("[ RENAISSANCE ] Profil activé", { description: res.system_message });
         if (onInitiated) await onInitiated();
         navigate("/");
       } else {
-        setMessages([...history, { role: "assistant", content: res.data.message }]);
+        setMessages([...history, { role: "assistant", content: res.message }]);
       }
     } catch (e) {
       toast.error("Erreur RENAISSANCE", { description: e?.response?.data?.detail || e.message });
@@ -100,11 +94,7 @@ export default function Awakening({ onInitiated }) {
           <p className="text-sm mb-10 font-mono" style={{ color: "var(--text-muted)" }}>
             corps · croyances · valeurs · direction · vision
           </p>
-          <button
-            data-testid="start-awakening-btn"
-            onClick={handleStart}
-            className="sys-btn inline-flex items-center gap-2"
-          >
+          <button data-testid="start-awakening-btn" onClick={handleStart} className="sys-btn inline-flex items-center gap-2">
             <Sparkles size={14} /> Commencer
           </button>
           <p className="text-xs mt-6 font-mono" style={{ color: "rgba(107,138,148,0.6)" }}>
@@ -134,7 +124,7 @@ export default function Awakening({ onInitiated }) {
               data-testid="awakening-restart-btn"
               onClick={handleRestart}
               disabled={thinking || finalizing}
-              className="inline-flex items-center gap-1 transition hover:text-green-400 disabled:opacity-40 uppercase tracking-widest text-[10px]"
+              className="inline-flex items-center gap-1 transition disabled:opacity-40 uppercase tracking-widest text-[10px]"
               style={{ color: "var(--text-muted)" }}
             >
               <RotateCcw size={11} /> Reset
@@ -144,79 +134,43 @@ export default function Awakening({ onInitiated }) {
 
         <div className="px-5 pt-3 pb-2">
           <div className="flex items-center justify-between mb-1.5">
-            <span className="font-accent text-[10px] tracking-[0.3em] uppercase" style={{ color: "rgba(0,255,135,0.5)" }}>
-              Cartographie
-            </span>
-            <span className="font-mono text-[10px]" style={{ color: progress >= 70 ? "var(--gold)" : "rgba(0,255,135,0.5)" }}>
-              {progress}%
-            </span>
+            <span className="font-accent text-[10px] tracking-[0.3em] uppercase" style={{ color: "rgba(0,255,135,0.5)" }}>Cartographie</span>
+            <span className="font-mono text-[10px]" style={{ color: progress >= 70 ? "var(--gold)" : "rgba(0,255,135,0.5)" }}>{progress}%</span>
           </div>
           <div className="mapping-bar-track">
-            <div
-              className={`mapping-bar-fill ${progress >= 70 ? "at-70" : ""}`}
-              style={{ width: `${progress}%` }}
-            />
+            <div className={`mapping-bar-fill ${progress >= 70 ? "at-70" : ""}`} style={{ width: `${progress}%` }} />
           </div>
           <AnimatePresence>
             {canEarlyGenerate && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: "auto" }}
-                exit={{ opacity: 0, height: 0 }}
-                className="mt-2"
-              >
-                <button
-                  onClick={handleEarlyGenerate}
-                  className="sys-btn-gold sys-btn inline-flex items-center gap-2 w-full justify-center text-[11px]"
-                  style={{ padding: "0.45rem 1rem" }}
-                >
-                  <Zap size={12} />
-                  Assez de données — Générer mes quêtes maintenant
+              <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="mt-2">
+                <button onClick={handleEarlyGenerate} className="sys-btn sys-btn-gold inline-flex items-center gap-2 w-full justify-center text-[11px]" style={{ padding: "0.45rem 1rem" }}>
+                  <Zap size={12} /> Assez de données — Générer mes quêtes maintenant
                 </button>
               </motion.div>
             )}
           </AnimatePresence>
         </div>
 
-        <div
-          ref={scrollRef}
-          className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 space-y-4"
-          data-testid="awakening-chat-messages"
-        >
+        <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 space-y-4" data-testid="awakening-chat-messages">
           <AnimatePresence initial={false}>
             {messages.map((m, i) => (
-              <motion.div
-                key={i}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3 }}
-                className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}
-                data-testid={`msg-${m.role}-${i}`}
-              >
-                <div
-                  className="max-w-[85%] px-4 py-3"
-                  style={m.role === "user"
-                    ? { background: "rgba(0,255,135,0.08)", border: "1px solid rgba(0,255,135,0.35)", color: "var(--text)" }
-                    : { background: "rgba(8,12,14,0.8)", border: "1px solid rgba(0,255,135,0.15)", color: "var(--text)" }
-                  }
-                >
+              <motion.div key={i} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}
+                className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`} data-testid={`msg-${m.role}-${i}`}>
+                <div className="max-w-[85%] px-4 py-3" style={m.role === "user"
+                  ? { background: "rgba(0,255,135,0.08)", border: "1px solid rgba(0,255,135,0.35)", color: "var(--text)" }
+                  : { background: "rgba(8,12,14,0.8)", border: "1px solid rgba(0,255,135,0.15)", color: "var(--text)" }}>
                   {m.role === "assistant" && (
-                    <div className="font-accent text-[10px] tracking-[0.3em] uppercase mb-1.5" style={{ color: "rgba(0,255,135,0.6)" }}>
-                      [ RENAISSANCE ]
-                    </div>
+                    <div className="font-accent text-[10px] tracking-[0.3em] uppercase mb-1.5" style={{ color: "rgba(0,255,135,0.6)" }}>[ RENAISSANCE ]</div>
                   )}
                   <div className="text-sm leading-relaxed whitespace-pre-wrap">{m.content}</div>
                 </div>
               </motion.div>
             ))}
           </AnimatePresence>
-
           {thinking && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex justify-start" data-testid="thinking-indicator">
               <div className="px-4 py-3" style={{ background: "rgba(8,12,14,0.8)", border: "1px solid rgba(0,255,135,0.15)" }}>
-                <div className="font-accent text-[10px] tracking-[0.3em] uppercase mb-1.5" style={{ color: "rgba(0,255,135,0.6)" }}>
-                  [ RENAISSANCE ]
-                </div>
+                <div className="font-accent text-[10px] tracking-[0.3em] uppercase mb-1.5" style={{ color: "rgba(0,255,135,0.6)" }}>[ RENAISSANCE ]</div>
                 <div className="flex items-center gap-2 text-sm" style={{ color: "var(--green)" }}>
                   <Loader2 size={14} className="animate-spin" />
                   <span className="font-mono">{finalizing ? "génération du profil..." : "analyse en cours..."}</span>
@@ -229,22 +183,14 @@ export default function Awakening({ onInitiated }) {
         <div className="p-4" style={{ borderTop: "1px solid rgba(0,255,135,0.15)" }}>
           <div className="flex gap-2 items-end">
             <textarea
-              ref={inputRef}
-              data-testid="awakening-chat-input"
-              autoFocus rows={2}
+              ref={inputRef} data-testid="awakening-chat-input" autoFocus rows={2}
               className="sys-input resize-none flex-1"
               placeholder={thinking ? "Renaissance analyse..." : "Réponds honnêtement..."}
-              value={input}
-              disabled={thinking || finalizing}
+              value={input} disabled={thinking || finalizing}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
             />
-            <button
-              data-testid="awakening-chat-send"
-              onClick={handleSend}
-              disabled={!input.trim() || thinking || finalizing}
-              className="sys-btn inline-flex items-center gap-2 self-stretch"
-            >
+            <button data-testid="awakening-chat-send" onClick={handleSend} disabled={!input.trim() || thinking || finalizing} className="sys-btn inline-flex items-center gap-2 self-stretch">
               <Send size={14} />
             </button>
           </div>
